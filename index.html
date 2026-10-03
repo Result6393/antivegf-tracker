@@ -1,0 +1,1705 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Anti-VEGF interval tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F6F7; --surface:#FFFFFF; --ink:#15222A; --muted:#566570; --line:#D5DDE1;
+  --accent:#0D6770; --accent-soft:#E1F0F1; --on-accent:#FFFFFF;
+  --warn:#9A5700; --warn-soft:#FBEFD9; --danger:#B3261E; --danger-soft:#FBE3E1;
+  --dry:#2C6B3B; --dry-soft:#E2F1E5;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1418; --surface:#162027; --ink:#E4EBEE; --muted:#96A4AD; --line:#2A3740;
+    --accent:#5BB8C0; --accent-soft:#17343A; --on-accent:#08171A;
+    --warn:#E2A651; --warn-soft:#3A2B12; --danger:#F08A82; --danger-soft:#3D1D1B;
+    --dry:#86C694; --dry-soft:#1B3322;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1418; --surface:#162027; --ink:#E4EBEE; --muted:#96A4AD; --line:#2A3740;
+  --accent:#5BB8C0; --accent-soft:#17343A; --on-accent:#08171A;
+  --warn:#E2A651; --warn-soft:#3A2B12; --danger:#F08A82; --danger-soft:#3D1D1B;
+  --dry:#86C694; --dry-soft:#1B3322;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);overflow-anchor:none}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:17px;line-height:1.45;-webkit-text-size-adjust:100%}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.35rem;margin:0;line-height:1.2}
+h2{font-size:1.05rem;margin:0 0 12px}
+.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
+.today{margin:0;color:var(--muted);font-size:.9rem;white-space:nowrap}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* both-eye overview */
+.overview{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.ov{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left}
+.ov[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.ov-eye{display:block;font-weight:700}
+.ov-due{display:block;font-size:.9rem;color:var(--muted)}
+.ov-due.overdue{color:var(--danger)} .ov-due.soon{color:var(--warn)}
+
+/* segmented controls */
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;border-radius:7px;padding:9px 8px;font-weight:700;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.status-seg button[data-status="dry"][aria-pressed="true"]{background:var(--dry-soft);color:var(--dry);box-shadow:none}
+.status-seg button[data-status="more"][aria-pressed="true"]{background:var(--danger-soft);color:var(--danger);box-shadow:none}
+.status-seg button[data-status="less"][aria-pressed="true"]{background:var(--warn-soft);color:var(--warn);box-shadow:none}
+.status-seg button{font-size:.92rem;line-height:1.15}
+.rtoggle{display:grid;grid-template-columns:1fr auto;column-gap:12px;width:100%;border:0;background:none;padding:0;text-align:left;border-radius:6px}
+.rt-title{font-weight:700;font-size:1.05rem}
+.rt-sub{grid-column:1;font-size:.9rem;color:var(--muted)}
+.chev{grid-column:2;grid-row:1 / span 2;align-self:center;font-size:1.1rem;color:var(--muted)}
+.rtoggle[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.rbody{margin-top:4px}
+.oct-row{display:grid;grid-template-columns:30px 1fr;align-items:center;gap:8px;margin-top:6px}
+.oct-row b{font-size:.95rem}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:14px}
+
+/* next due */
+.due{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 16px 16px}
+.due-label{margin:0;color:var(--muted);font-size:.95rem}
+.due-date{margin:2px 0 0;font-size:2rem;font-weight:700;line-height:1.15;letter-spacing:-.01em}
+.due-rel{display:inline-block;margin-top:6px;padding:2px 10px;border-radius:999px;font-weight:700;font-size:.95rem;background:var(--accent-soft);color:var(--accent)}
+.due-rel.soon{background:var(--warn-soft);color:var(--warn)}
+.due-rel.overdue{background:var(--danger-soft);color:var(--danger)}
+.empty{margin:0;color:var(--muted)}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:16px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+.facts dt{color:var(--muted)} .facts dd{margin:0;font-weight:700}
+.facts small{font-weight:400;color:var(--muted)}
+.plan{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stepper button{border:0;background:var(--bg);width:44px;height:44px;font-size:1.3rem;font-weight:700}
+.stepper output{min-width:88px;text-align:center;font-weight:700}
+.upcoming{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.upcoming p{margin:0;color:var(--muted)}
+.upcoming ol{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:10px}
+.upcoming li{display:grid;grid-template-columns:40px 1fr;column-gap:8px}
+.up-n{grid-row:span 2;color:var(--muted);font-weight:700}
+.up-date{font-weight:700}
+.up-date.overdue{color:var(--danger)}
+.up-rev{font-size:.92rem;color:var(--muted)}
+.due h2{margin:0}
+.due-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sg-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
+.sg-list li{display:grid;grid-template-columns:1fr;column-gap:8px;align-items:baseline;padding-top:12px;border-top:1px solid var(--line)}
+.sg-list li:first-child{border-top:0;padding-top:0}
+.sg-date{font-weight:700}
+.sg-for{grid-column:1 / span 2;font-size:.92rem;color:var(--muted)}
+.day-seg button{padding:9px 2px;font-size:.92rem}
+.sg-days{grid-column:1;display:flex;flex-direction:column;align-items:flex-start;gap:3px;margin-top:4px;font-size:.92rem}
+.dchip{padding:0 7px;border-radius:999px;font-weight:700}
+.dchip.g{background:var(--dry-soft);color:var(--dry)}
+.dchip.o{background:var(--warn-soft);color:var(--warn)}
+.dchip.r{background:var(--danger-soft);color:var(--danger)}
+.sg-list li.opt .sg-date{color:var(--muted)}
+.closed-tag{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--danger-soft);color:var(--danger);font-weight:700;font-size:.82rem}
+.sg-note{grid-column:1;font-size:.88rem;font-weight:700}
+.sg-note.o{color:var(--warn)} .sg-note.r{color:var(--danger)}
+.cl-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+.cl-list li{display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:4px 4px 4px 12px}
+.cl-list li.editing{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cl-item{border:0;background:none;text-align:left;padding:6px 0;display:grid}
+.cl-item b{font-weight:700} .cl-item span{font-size:.9rem;color:var(--muted)}
+.calc-out{margin-top:14px;padding:14px;border-radius:10px;background:var(--bg)}
+.calc-date{margin:0;font-size:1.3rem;font-weight:700}
+.calc-rel{margin:2px 0 0;color:var(--muted)}
+.calc-st{display:inline-block;margin-top:8px;padding:2px 10px;border-radius:999px;font-weight:700;font-size:.92rem}
+.calc-st.open{background:var(--dry-soft);color:var(--dry)}
+.calc-st.closed{background:var(--danger-soft);color:var(--danger)}
+.calc-st.warn{background:var(--warn-soft);color:var(--warn)}
+.calc-alt{margin:8px 0 0;font-size:.92rem}
+.cl-h{font-size:1rem;margin:18px 0 8px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.linkish{border:0;background:none;color:var(--accent);font-weight:700;padding:8px 0;text-decoration:underline}
+.sg-alt{grid-column:1 / span 2;margin-top:4px;font-size:.88rem;color:var(--accent)}
+.sg-alt b{font-weight:700}
+.sg-hint{grid-column:1 / span 2;margin-top:4px;font-size:.88rem;color:var(--warn)}
+.sg-both{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:.8rem;vertical-align:1px}
+.up-hint{margin:6px 0 0;font-size:.88rem;color:var(--muted)}
+.up-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px}
+.up-item{border-radius:10px}
+.up-item.editing{background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)}
+.up-main{display:grid;grid-template-columns:34px 1fr;column-gap:8px;align-items:baseline;width:100%;border:0;background:none;text-align:left;padding:8px;border-radius:10px}
+.up-main .up-n{grid-row:span 2;color:var(--muted);font-weight:700}
+.up-main .up-date{font-weight:700}
+.up-rel{font-size:.9rem;font-weight:700;color:var(--accent)}
+.up-rel.soon{color:var(--warn)} .up-rel.overdue{color:var(--danger)}
+.up-main .up-int,.up-main .up-rev{grid-column:2;font-size:.92rem;color:var(--muted)}
+.up-int b{color:var(--ink)}
+.up-int b.int-changed,.up-int b.int-kept{padding:0 7px;border-radius:999px}
+.up-int b.int-changed{background:var(--danger-soft);color:var(--danger)}
+.up-int b.int-kept{background:var(--dry-soft);color:var(--dry)}
+.moved{display:inline-block;margin-left:6px;padding:0 7px;border-radius:999px;background:var(--danger-soft);color:var(--danger);font-weight:700;font-size:.82rem}
+.adj{padding:0 8px 10px}
+.adj-btns{display:grid;grid-template-columns:repeat(4,1fr) auto;gap:6px}
+.adj-btns button{min-height:42px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:700;font-size:.9rem;padding:0 10px;touch-action:manipulation}
+.adj-btns .reset{color:var(--muted)}
+.adj p{margin:8px 0 0;font-size:.88rem;color:var(--muted)}
+.instr{margin:14px 0 0;padding:12px;background:var(--bg);border-radius:8px;font:inherit;font-size:.92rem;white-space:pre-wrap;user-select:all;-webkit-user-select:all}
+.secondary{margin-top:10px;width:100%;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:10px;padding:11px;font-weight:700}
+
+/* add form */
+.field{display:grid;gap:4px;margin-top:12px}
+.field>span,.field>label{color:var(--muted);font-size:.9rem}
+input[type=date],input[type=text],input[type=number],select{width:100%;min-height:46px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.primary{margin-top:16px;width:100%;border:0;background:var(--accent);color:var(--on-accent);border-radius:10px;padding:13px;font-weight:700}
+.date-row{display:flex;gap:8px}
+.date-row input{flex:1;min-width:0}
+.today-btn{flex:0 0 auto;min-height:46px;padding:0 16px;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:10px;font-weight:700}
+.nudge{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px}
+.nudge button{min-height:44px;border:1px solid var(--line);background:var(--bg);border-radius:8px;font-weight:700;font-size:.92rem;padding:0;touch-action:manipulation}
+.nudge button:active{background:var(--accent-soft);border-color:var(--accent)}
+.date-hint{margin:6px 0 0;font-size:.88rem;color:var(--muted)}
+.primary:active{transform:scale(.98)}
+.primary.done{background:var(--dry);color:var(--surface)}
+@media (prefers-reduced-motion:no-preference){.primary{transition:background-color .2s,transform .08s}}
+.err.ok{color:var(--dry);font-weight:700}
+.err{margin:8px 0 0;color:var(--danger);font-size:.92rem;min-height:1em}
+.hidden{display:none!important}
+
+/* timeline */
+.timeline{list-style:none;margin:0;padding:0;position:relative}
+.timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.ev{position:relative;display:grid;grid-template-columns:20px 1fr auto;gap:12px;padding:8px 0}
+.mark{width:20px;height:20px;margin-top:2px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);position:relative;z-index:1}
+.ev.rev .mark{background:var(--surface);border:2px solid var(--muted);border-radius:4px;transform:scale(.8)}
+.ev-head{margin:0;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.ev-head strong{font-size:1rem}
+.ev-meta{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.ev-meta b{color:var(--ink)}
+.chip{font-size:.82rem;font-weight:700;padding:1px 8px;border-radius:999px}
+.chip.dry{background:var(--dry-soft);color:var(--dry)} .chip.more{background:var(--danger-soft);color:var(--danger)} .chip.less{background:var(--warn-soft);color:var(--warn)}
+.code-box{margin-top:6px;padding:14px;border-radius:10px;background:var(--bg);font-size:1.25rem;font-weight:700;line-height:1.6;letter-spacing:.06em;word-break:break-word;user-select:all;-webkit-user-select:all}
+.code-box.empty{font-size:.95rem;font-weight:400;letter-spacing:0;color:var(--muted);user-select:auto;-webkit-user-select:auto}
+.code-sum{margin:6px 0 0;font-size:.88rem;color:var(--muted)}
+.ev-main{cursor:pointer;border-radius:8px;padding:2px 6px;margin:-2px -6px}
+.ev-main:hover{background:var(--bg)}
+.ev.editing .ev-edit{grid-column:2 / span 2;background:var(--bg);border-radius:10px;padding:12px;min-width:0}
+.ev-edit .ev-head strong{font-size:1rem}
+.ev-edit .field{grid-template-columns:minmax(0,1fr)}
+.ev-edit .field:first-of-type{margin-top:10px}
+.he-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.he-actions .primary,.he-actions .secondary{margin-top:0}
+.del{border:0;background:transparent;color:var(--muted);width:40px;height:40px;border-radius:8px;font-size:1.3rem}
+.del:hover{background:var(--bg);color:var(--danger)}
+
+.tl{display:flex;margin:0 -4px}
+.tl-labels{position:relative;flex:0 0 74px;border-right:1px solid var(--line)}
+.overlap{margin-top:10px;font-size:.92rem}
+.overlap p{margin:0 0 4px}
+.tl-labels span{position:absolute;left:4px;white-space:nowrap;font-size:.76rem;font-weight:700;color:var(--muted);line-height:1}
+.chart-scroll{flex:1;min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
+.legend i.round{border-radius:50%}
+.legend i.today{width:2px;border-radius:0;background:var(--danger)}
+.chart-note{margin:0 0 8px;color:var(--muted);font-size:.9rem}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.legend i.planned{background:var(--accent-soft);border:2px dashed var(--accent)}
+.modal-bg{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:calc(20px + env(safe-area-inset-top,0px)) 20px calc(20px + env(safe-area-inset-bottom,0px));background:rgba(8,15,20,.55)}
+.modal{width:100%;max-width:420px;max-height:100%;overflow:auto;background:var(--surface);color:var(--ink);border-radius:14px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.modal h2{margin:0 0 10px;font-size:1.15rem}
+.modal ol{margin:0;padding-left:1.3em;display:grid;gap:6px}
+.modal .warn-box{margin:14px 0 0;padding:10px 12px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:.95rem}
+.modal .primary{margin-top:16px}
+footer{margin-top:20px;color:var(--muted);font-size:.88rem}
+footer p{margin:0 0 10px}
+.ghost{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:11px;font-weight:700;color:var(--danger)}
+@media (prefers-reduced-motion:no-preference){.due-date{transition:color .2s}}
+</style>
+</head>
+<body>
+<div class="modal-bg" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+  <div class="modal">
+    <h2 id="introTitle">How to use</h2>
+    <ol>
+      <li>Add a review date.</li>
+      <li>Add the recent injections.</li>
+      <li>The app works out the dates for future injections.</li>
+    </ol>
+    <p class="warn-box"><b>Note:</b> the clinic closure dates haven't been checked yet. They're rough placeholders and are probably wrong.</p>
+    <button type="button" class="primary" id="introOk">Got it</button>
+  </div>
+</div>
+<main class="wrap">
+  <header class="top">
+    <h1>Anti-VEGF interval tracker</h1>
+    <p class="today" id="today"></p>
+  </header>
+
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="pToggle" aria-expanded="false" aria-controls="pBody">
+      <span class="rt-title">Patient code</span>
+      <span class="rt-sub" id="pSub"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="pBody" class="rbody hidden">
+      <p class="up-hint">A few words that hold the dates of the last two injections for each eye, the plan for the next injections (interval and any moved dates) and the latest review date. Drugs and OCT results aren't included. The dates and results are inside the words, so nothing is stored anywhere. Write the words in the notes, then enter them here next time. A code reads correctly for 5 years.</p>
+      <div class="field"><label for="pIn">Enter the code words</label>
+        <div class="date-row"><input type="text" id="pIn" placeholder="e.g. awning aim constable scary" autocapitalize="none" autocomplete="off" autocorrect="off" spellcheck="false"><button type="button" class="today-btn" id="pLoad">Load</button></div>
+      </div>
+      <p class="err" id="pErr" role="alert"></p>
+      <h3 class="cl-h">Code for this patient</h3>
+      <div class="code-box empty" id="pCode"></div>
+      <p class="code-sum" id="pSum"></p>
+      <button type="button" class="secondary" id="pCopy">Copy code</button>
+    </div>
+  </section>
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="rToggle" aria-expanded="true" aria-controls="rBody">
+      <span class="rt-title">Add review (both eyes)</span>
+      <span class="rt-sub hidden" id="rSub"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="rBody" class="rbody">
+    <div class="field"><label for="rDate">Date</label>
+      <div class="date-row"><input type="date" id="rDate"><button type="button" class="today-btn" id="rToday">Today</button></div>
+    </div>
+    <div class="nudge" id="rNudge" aria-label="Adjust date">
+      <button type="button" data-d="-28" aria-label="Back 4 weeks">&minus;4w</button>
+      <button type="button" data-d="-7" aria-label="Back 1 week">&minus;1w</button>
+      <button type="button" data-d="-1" aria-label="Back 1 day">&minus;1d</button>
+      <button type="button" data-d="1" aria-label="Forward 1 day">+1d</button>
+      <button type="button" data-d="7" aria-label="Forward 1 week">+1w</button>
+      <button type="button" data-d="28" aria-label="Forward 4 weeks">+4w</button>
+    </div>
+    <p class="date-hint" id="rHint"></p>
+    <div class="field"><span>OCT (optional)</span>
+      <div class="oct-row"><b>RE</b><div class="seg status-seg" data-eye="RE">
+        <button type="button" data-status="dry">Dry</button>
+        <button type="button" data-status="more">More fluid</button>
+        <button type="button" data-status="less">Less fluid</button>
+      </div></div>
+      <div class="oct-row"><b>LE</b><div class="seg status-seg" data-eye="LE">
+        <button type="button" data-status="dry">Dry</button>
+        <button type="button" data-status="more">More fluid</button>
+        <button type="button" data-status="less">Less fluid</button>
+      </div></div>
+    </div>
+    <button type="button" class="primary" id="rAdd">Add review</button>
+    <p class="err" id="rErr" role="alert"></p>
+    </div>
+  </section>
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="iToggle" aria-expanded="true" aria-controls="iBody">
+      <span class="rt-title">Add injections</span>
+      <span class="rt-sub hidden" id="iSub"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="iBody" class="rbody">
+    <div class="seg eye-seg" id="iEye" style="margin-top:10px">
+      <button type="button" data-eye="RE">Right eye</button>
+      <button type="button" data-eye="LE">Left eye</button>
+    </div>
+    <div class="field"><label for="iDate">Date</label>
+      <div class="date-row"><input type="date" id="iDate"><button type="button" class="today-btn" id="iToday">Today</button></div>
+    </div>
+    <div class="nudge" id="iNudge" aria-label="Adjust date">
+      <button type="button" data-d="-28" aria-label="Back 4 weeks">&minus;4w</button>
+      <button type="button" data-d="-7" aria-label="Back 1 week">&minus;1w</button>
+      <button type="button" data-d="-1" aria-label="Back 1 day">&minus;1d</button>
+      <button type="button" data-d="1" aria-label="Forward 1 day">+1d</button>
+      <button type="button" data-d="7" aria-label="Forward 1 week">+1w</button>
+      <button type="button" data-d="28" aria-label="Forward 4 weeks">+4w</button>
+    </div>
+    <p class="date-hint" id="iHint"></p>
+    <label class="field"><span>Drug</span>
+      <select id="drug">
+        <option value="">Not specified</option>
+      </select>
+    </label>
+    <button type="button" class="primary" id="iAdd">Add injection</button>
+    <p class="err" id="iErr" role="alert"></p>
+    </div>
+  </section>
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="hToggle" aria-expanded="false" aria-controls="hBody">
+      <span class="rt-title">History</span>
+      <span class="rt-sub" id="hSub"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="hBody" class="rbody hidden">
+    <div class="seg eye-seg" id="hEye" style="margin:10px 0 12px">
+      <button type="button" data-eye="RE">Right eye</button>
+      <button type="button" data-eye="LE">Left eye</button>
+    </div>
+    <p class="up-hint" style="margin:0 0 8px">Tap an entry to edit it.</p>
+    <ol class="timeline" id="timeline"></ol>
+    </div>
+  </section>
+
+
+  <section class="overview" id="overview" aria-label="Both eyes"></section>
+
+  <section class="due" id="due" style="margin-bottom:14px" aria-live="polite"></section>
+
+  <section class="panel hidden" id="chartPanel" style="margin:0 0 14px">
+    <h2 id="chartTitle">Both eyes</h2>
+    <p class="chart-note">Lines between injections show the interval. Review bars run from the preceding injection. Shaded boxes are review windows; the full-height band is where both eyes' windows overlap.</p>
+    <div class="tl">
+      <div class="tl-labels"><span style="top:26px">RE inj</span><span style="top:78px">RE review</span><span style="top:130px">LE inj</span><span style="top:182px">LE review</span></div>
+      <div class="chart-scroll" id="chart"></div>
+    </div>
+    <div class="legend">
+      <span><i class="round" style="background:var(--accent)"></i>Injection</span>
+      <span><i class="planned round"></i>Planned injection</span>
+      <span><i style="background:var(--dry)"></i>Dry</span>
+      <span><i style="background:var(--danger)"></i>More fluid</span>
+      <span><i style="background:var(--warn)"></i>Less fluid</span>
+      <span><i style="background:var(--muted)"></i>Review, no comment</span>
+      <span><i class="planned"></i>Review week (preferred)</span>
+      <span><i style="background:var(--accent-soft)"></i>2 weeks before</span>
+      <span><i style="background:var(--accent);opacity:.18"></i>Both windows</span>
+      <span><i style="background:var(--muted);opacity:.3"></i>Clinic closed</span>
+      <span><i class="today"></i>Today</span>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="sgPanel" style="margin:0 0 14px">
+    <h2>Suggested review dates</h2>
+    <label class="field" style="margin-top:0"><span>Clinic day</span>
+      <select id="sgDay">
+        <option value="">Any day</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+      </select>
+    </label>
+    <p class="up-hint" id="sgNote"></p>
+    <ol class="sg-list" id="sgList"></ol>
+  </section>
+
+
+
+
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="kToggle" aria-expanded="false" aria-controls="kBody">
+      <span class="rt-title">Date calculator</span>
+      <span class="rt-sub" id="kSub">Weeks ahead to a date, or a date to weeks away. Tap to open.</span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="kBody" class="rbody hidden">
+      <div class="seg" id="kMode" style="margin-top:10px">
+        <button type="button" data-mode="weeks">Weeks &rarr; date</button>
+        <button type="button" data-mode="date">Date &rarr; weeks</button>
+      </div>
+      <div id="kWeeksF">
+        <div class="field"><span>Weeks from</span>
+          <div class="date-row"><input type="date" id="kFrom" aria-label="Start date"><button type="button" class="today-btn" id="kFromToday">Today</button></div>
+        </div>
+        <div class="field"><span>Number of weeks</span>
+          <div class="stepper" style="align-self:start">
+            <button type="button" id="kMinus" aria-label="One week fewer">&minus;</button>
+            <input type="number" id="kWeeks" min="0" max="104" value="16" inputmode="numeric" aria-label="Weeks" style="width:84px;min-height:44px;border:0;border-radius:0;text-align:center;font-weight:700">
+            <button type="button" id="kPlus" aria-label="One week more">+</button>
+          </div>
+        </div>
+      </div>
+      <div id="kDateF" class="hidden">
+        <label class="field"><span>Date</span><input type="date" id="kDate"></label>
+      </div>
+      <div class="calc-out" id="kOut" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="panel" style="margin:0 0 14px">
+    <button type="button" class="rtoggle" id="cToggle" aria-expanded="false" aria-controls="cBody">
+      <span class="rt-title">Clinic closures</span>
+      <span class="rt-sub" id="cSub"></span>
+      <span class="chev" aria-hidden="true">&#9662;</span>
+    </button>
+    <div id="cBody" class="rbody hidden">
+      <p class="up-hint">Planned injections on a closed day are flagged, and suggested reviews skip closed days. Tap a closure to edit it. Saved on this device.</p>
+      <ul class="cl-list" id="cList"></ul>
+      <h3 class="cl-h" id="cFormTitle">Add a closure</h3>
+      <div class="seg" id="cType">
+        <button type="button" data-type="range">Dates</button>
+        <button type="button" data-type="repeat">Repeating</button>
+      </div>
+      <div id="cRangeF" class="two">
+        <label class="field"><span>From</span><input type="date" id="cFrom"></label>
+        <label class="field"><span>To (optional)</span><input type="date" id="cTo"></label>
+      </div>
+      <div id="cRepeatF" class="two hidden">
+        <label class="field"><span>First closed day</span><input type="date" id="cStart"></label>
+        <label class="field"><span>Every (weeks)</span><input type="number" id="cEvery" min="1" max="52" value="4" inputmode="numeric"></label>
+      </div>
+      <label class="field"><span>Label (optional)</span><input type="text" id="cLabel" placeholder="e.g. Public holiday" maxlength="40"></label>
+      <button type="button" class="primary" id="cAdd">Add closure</button>
+      <p class="err" id="cErr" role="alert"></p>
+      <button type="button" class="linkish hidden" id="cCancel">Cancel editing</button>
+      <button type="button" class="linkish" id="cDefaults">Restore default closures</button>
+    </div>
+  </section>
+
+  <footer>
+    <p>Don't enter names, MRNs or other identifiers. Nothing is saved: reloading the page or tapping New patient clears everything.</p>
+    <button type="button" class="ghost" id="clearBtn">New patient</button>
+  </footer>
+</main>
+
+<script>
+(function(){
+  const EYES = {RE:'Right eye', LE:'Left eye'};
+  const blank = () => ({events:[], interval:null, drug:'', shift:[0,0,0]});
+  let state = {eye:'RE', RE:blank(), LE:blank(), reviews:[]};
+  let dayChoice;   // undefined = follow the most recent review; null = any day; 0-6 = chosen weekday
+  let editK = null, addStatus = {RE:null, LE:null}, nextId = 1, reviewOpen = null, injOpen = true, histOpen = false, hEdit = null;
+  const STATUS = {
+    dry:  {label: 'Dry', text: 'dry', col: 'var(--dry)'},
+    more: {label: 'More fluid', text: 'more fluid', col: 'var(--danger)'},
+    less: {label: 'Less fluid', text: 'less fluid', col: 'var(--warn)'}
+  };
+  const stCol = st => st && STATUS[st] ? STATUS[st].col : 'var(--muted)';
+
+  const DAY = 864e5;
+  const dayNum = iso => { const [y,m,d] = iso.split('-').map(Number); return Math.round(Date.UTC(y,m-1,d)/DAY); };
+  const todayNum = () => { const t = new Date(); return Math.round(Date.UTC(t.getFullYear(),t.getMonth(),t.getDate())/DAY); };
+  const toIso = n => new Date(n*DAY).toISOString().slice(0,10);
+  const fmtLong = n => new Date(n*DAY).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+  const fmtMed = n => new Date(n*DAY).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+  const fmtShort = n => new Date(n*DAY).toLocaleDateString('en-AU',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'});
+  const wd = days => { const a = Math.abs(days), w = Math.floor(a/7), d = a%7;
+    if (w === 0) return d + 'd'; return d ? `${w}w ${d}d` : `${w}w`; };
+  const fmtDM = n => new Date(n*DAY).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',timeZone:'UTC'});
+  const fmtRange = (a, b) => `${fmtDM(a)} to ${fmtDM(b)}`;
+  const wdLong = days => { const a = Math.abs(days), w = Math.floor(a/7), d = a%7, p = [];
+    if (w) p.push(`${w} week${w === 1 ? '' : 's'}`); if (d) p.push(`${d} day${d === 1 ? '' : 's'}`);
+    return p.join(' and ') || '0 days'; };
+  const relLong = days => days === 0 ? 'today' : days > 0 ? `in ${wdLong(days)}` : `${wdLong(days)} ago`;
+  const rel = days => days === 0 ? 'today' : days > 0 ? `in ${wd(days)}` : `${wd(days)} ago`;
+  const ago = days => days === 0 ? 'today' : days > 0 ? `${wd(days)} ago` : `in ${wd(-days)}`;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  const $ = id => document.getElementById(id);
+
+  // ---- Clinic closures (not patient data; saved on this device) ----
+  const DEFAULT_CLOSURES = [
+    {id: 'd1', type: 'repeat', start: dayNum('2026-10-02'), every: 4, label: 'Every 4th Friday'},
+    {id: 'd2', type: 'range', from: dayNum('2026-12-21'), to: dayNum('2027-01-10'), label: 'Christmas closure'},
+    // NSW public holidays 2027 (nsw.gov.au). Bank Holiday (2 Aug) omitted: banks only.
+    ...[
+      ['2027-01-01', '2027-01-01', "New Year's Day"],
+      ['2027-01-26', '2027-01-26', 'Australia Day'],
+      ['2027-03-26', '2027-03-29', 'Easter (Good Friday to Easter Monday)'],
+      ['2027-04-25', '2027-04-26', 'Anzac Day + additional day'],
+      ['2027-06-14', '2027-06-14', "King's Birthday"],
+      ['2027-10-04', '2027-10-04', 'Labour Day'],
+      ['2027-12-25', '2027-12-28', 'Christmas, Boxing Day + additional days']
+    ].map(([a, b, l], i) => ({id: 'h27_' + i, type: 'range', from: dayNum(a), to: dayNum(b), label: 'PH 2027: ' + l}))
+  ];
+  let closures = null;
+  try { closures = JSON.parse(localStorage.getItem('clinicClosures')); } catch(e) {}
+  if (!Array.isArray(closures)) closures = DEFAULT_CLOSURES.map(c => ({...c}));
+  else {
+    // add the 2027 public holidays once to lists saved before they existed
+    let added = false;
+    try { added = localStorage.getItem('ph2027Added') === '1'; } catch(e) {}
+    if (!added){
+      const have = new Set(closures.map(c => c.id));
+      DEFAULT_CLOSURES.filter(c => c.id.startsWith('h27_') && !have.has(c.id)).forEach(c => closures.push({...c}));
+      try { localStorage.setItem('ph2027Added', '1'); localStorage.setItem('clinicClosures', JSON.stringify(closures)); } catch(e) {}
+    }
+  }
+  // update the old default Christmas dates (to 17 Jan) on devices that saved them
+  closures.forEach(c => { if (c.id === 'd2' && c.to === dayNum('2027-01-17')) c.to = dayNum('2027-01-10'); });
+  const saveClosures = () => { try { localStorage.setItem('clinicClosures', JSON.stringify(closures)); } catch(e) {} };
+  const closureFor = d => closures.find(c => c.type === 'range'
+    ? d >= c.from && d <= c.to
+    : d >= c.start && (d - c.start) % (c.every * 7) === 0);
+  const isClosed = d => !!closureFor(d);
+  const closureName = c => c.label || (c.type === 'range' ? 'Closure' : `Every ${c.every} weeks`);
+
+  function analyse(eye){
+    const e = state[eye];
+    const revMapped = state.reviews.map(r => ({id: r.id, type: 'rev', day: r.day, status: r.status[eye] || null}));
+    const evs = e.events.concat(revMapped).sort((a,b) => a.day - b.day || (a.type === 'rev' ? -1 : 1) || a.id - b.id);
+    const injs = evs.filter(x => x.type === 'inj');
+    injs.forEach((x,i) => x.n = i+1);
+    const revs = evs.filter(x => x.type === 'rev');
+    const lastInj = injs[injs.length-1] || null;
+    const prevInj = injs[injs.length-2] || null;
+    const lastRev = revs[revs.length-1] || null;
+    const lastInterval = lastInj && prevInj ? lastInj.day - prevInj.day : null;
+    // The first upcoming injection is usually already booked, so it always uses the most recent
+    // interval; the stepper (planned) only applies from the second upcoming injection onwards.
+    const bookedWk = lastInterval ? Math.min(52, Math.max(4, Math.round(lastInterval/7))) : 4;
+    let planned = e.interval;
+    if (planned == null) planned = bookedWk;
+    // Each planned date = previous date + planned interval + any manual shift for that slot,
+    // so moving one injection carries the later ones with it and keeps their interval.
+    let prevF = lastInj ? lastInj.day : 0;
+    // futureAll projects further ahead so the review suggestions can list 6 visits; the injection list shows the first 3
+    const futureAll = lastInj ? Array.from({length: 12}, (_, k) => (prevF = prevF + (k === 0 ? bookedWk : planned)*7 + (e.shift[k] || 0))) : [];
+    const future = futureAll.slice(0, 3);
+    const nextDue = lastInj ? future[0] : null;
+    return {evs, injs, lastInj, lastRev, lastInterval, planned, bookedWk, nextDue, future, futureAll, shift: e.shift};
+  }
+
+  function dueClass(diff){ return diff < 0 ? 'overdue' : diff <= 7 ? 'soon' : ''; }
+
+  function renderOverview(){
+    const t = todayNum();
+    $('overview').innerHTML = Object.keys(EYES).map(eye => {
+      const a = analyse(eye);
+      let due = 'No injections';
+      let cls = '';
+      if (a.nextDue != null){ const diff = a.nextDue - t; due = `Due ${fmtMed(a.nextDue)}`; cls = dueClass(diff); }
+      return `<button type="button" class="ov" data-eye="${eye}" aria-pressed="${state.eye===eye}">
+        <span class="ov-eye">${EYES[eye]}</span><span class="ov-due ${cls}">${due}</span></button>`;
+    }).join('');
+  }
+
+  function renderDue(){
+    const eye = state.eye, a = analyse(eye), t = todayNum();
+    if (!a.lastInj){
+      $('due').innerHTML = `<h2>${EYES[eye]}: next 3 injections</h2>
+        <p class="empty">Add the most recent injection to calculate upcoming dates.</p>`;
+      return;
+    }
+    $('due').innerHTML = `
+      <div class="due-head"><h2>${EYES[eye]}: next 3 injections</h2>
+        <div class="stepper">
+          <button type="button" id="minus" aria-label="Shorten interval by one week">&minus;</button>
+          <output id="intv">${a.planned}-weekly</output>
+          <button type="button" id="plus" aria-label="Extend interval by one week">+</button>
+        </div></div>
+      <p class="up-hint">The interval applies from #${a.lastInj.n + 2}; #${a.lastInj.n + 1} keeps its booked ${a.bookedWk}w interval. Tap an injection to move it.</p>
+      <ol class="up-list">${a.future.map((f, k) => {
+        const diff = f - t, n = a.lastInj.n + k + 1;
+        const prev = k === 0 ? a.lastInj.day : a.future[k - 1];
+        const sh = a.shift[k] || 0, editing = editK === k;
+        const kept = !sh && a.shift.slice(0, k).some(x => x);   // standard interval after a moved injection
+        const intCls = sh ? 'int-changed' : kept ? 'int-kept' : '';
+        const moved = sh ? `<span class="moved">moved ${sh > 0 ? '+' : '&minus;'}${wd(sh)}</span>` : '';
+        return `<li class="up-item${editing ? ' editing' : ''}">
+          <button type="button" class="up-main" data-k="${k}" aria-expanded="${editing}">
+            <span class="up-n">#${n}</span>
+            <span class="up-date">${fmtLong(f)} <span class="up-rel ${dueClass(diff)}">(${diff < 0 ? 'overdue by ' + wdLong(diff) : relLong(diff)})</span></span>
+            <span class="up-int"><b class="${intCls}">${wd(f - prev)}</b> after #${n - 1}${moved}${closureFor(f) ? `<span class="closed-tag">Clinic closed</span>` : ''}</span>
+          </button>
+          ${editing ? `<div class="adj">
+            <div class="adj-btns">
+              <button type="button" data-sh="-7">&minus;1w</button><button type="button" data-sh="-1">&minus;1d</button>
+              <button type="button" data-sh="1">+1d</button><button type="button" data-sh="7">+1w</button>
+              <button type="button" class="reset" data-sh="0">Reset</button>
+            </div>
+            <p>${k < 2 ? `Later injections move with it, keeping the ${a.planned}w interval.` : 'This is the last planned injection shown.'}</p>
+          </div>` : ''}
+        </li>`;
+      }).join('')}</ol>
+`;
+    $('minus').onclick = () => { state[eye].interval = Math.max(4, a.planned - 1); render(); };
+    $('plus').onclick = () => { state[eye].interval = Math.min(52, a.planned + 1); render(); };
+    $('due').querySelectorAll('.up-main').forEach(b => b.onclick = () => {
+      const k = Number(b.dataset.k); editK = editK === k ? null : k; renderDue();
+    });
+    $('due').querySelectorAll('[data-sh]').forEach(b => b.onclick = () => {
+      const d = Number(b.dataset.sh), sh = state[eye].shift;
+      sh[editK] = d === 0 ? 0 : Math.max(-126, Math.min(126, (sh[editK] || 0) + d));
+      render();
+    });
+  }
+
+
+  function renderChart(){
+    const t = todayNum();
+    const A = {RE: analyse('RE'), LE: analyse('LE')};
+    const all = [...A.RE.evs, ...A.LE.evs];
+    if (!all.length){ $('chartPanel').classList.add('hidden'); return; }
+    $('chartPanel').classList.remove('hidden');
+    const box = $('chart');
+    const d0 = Math.min(...all.map(e => e.day)) - 7;
+    const d1 = Math.max(...all.map(e => e.day), t, ...A.RE.future, ...A.LE.future) + 12;
+    const ppd = Math.max(2.2, (box.clientWidth || 280) / (d1 - d0));
+    const W = Math.round((d1 - d0) * ppd);
+    const X = d => +((d - d0) * ppd).toFixed(1);
+    const rows = {RE: {inj: 34, rev: 86}, LE: {inj: 138, rev: 190}};
+    const yAxis = 218, H = 246;
+    let g = '';
+
+    // shared review windows (overlap of RE and LE windows)
+    const overlaps = [];
+    const win = f => [f - 7, f];
+    A.RE.future.forEach(fr => A.LE.future.forEach(fl => {
+      const [a1, b1] = win(fr), [a2, b2] = win(fl);
+      const s1 = Math.max(a1, a2), e1 = Math.min(b1, b2);
+      if (s1 <= e1) overlaps.push([s1, e1]);
+    }));
+    overlaps.forEach(([s1, e1]) => {
+      g += `<rect x="${X(s1)}" y="14" width="${X(e1 + 1) - X(s1)}" height="${yAxis - 14}" fill="var(--accent)" fill-opacity=".14"/>`;
+    });
+
+    // clinic closures
+    closures.forEach(c => {
+      if (c.type === 'range'){
+        if (c.to < d0 || c.from > d1) return;
+        const a1 = Math.max(c.from, d0), b1 = Math.min(c.to, d1);
+        g += `<rect x="${X(a1)}" y="14" width="${X(b1 + 1) - X(a1)}" height="${yAxis - 14}" fill="var(--muted)" fill-opacity=".16"/>`;
+      } else {
+        let d = c.start;
+        if (d < d0) d += Math.ceil((d0 - d) / (c.every * 7)) * c.every * 7;
+        for (; d <= d1; d += c.every * 7)
+          g += `<rect x="${X(d)}" y="14" width="${Math.max(2, X(d + 1) - X(d))}" height="${yAxis - 14}" fill="var(--muted)" fill-opacity=".22"/>`;
+      }
+    });
+    // month gridlines
+    const sd = new Date(d0 * DAY);
+    let m = new Date(Date.UTC(sd.getUTCFullYear(), sd.getUTCMonth() + 1, 1)), first = true;
+    while (m.getTime() / DAY <= d1){
+      const x = X(Math.round(m.getTime() / DAY));
+      const lab = m.toLocaleDateString('en-AU', {month: 'short', timeZone: 'UTC'}) + (first || m.getUTCMonth() === 0 ? ' ' + String(m.getUTCFullYear()).slice(2) : '');
+      g += `<line x1="${x}" x2="${x}" y1="16" y2="${yAxis}" stroke="var(--line)"/>`
+         + `<text x="${x + 4}" y="${yAxis + 17}" font-size="11" fill="var(--muted)">${lab}</text>`;
+      first = false;
+      m = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
+    }
+    g += `<line x1="0" x2="${W}" y1="${yAxis}" y2="${yAxis}" stroke="var(--muted)"/>`
+       + `<line x1="0" x2="${W}" y1="112" y2="112" stroke="var(--line)" stroke-width="2"/>`;
+
+    const xt = X(t);
+    g += `<line x1="${xt}" x2="${xt}" y1="12" y2="${yAxis}" stroke="var(--danger)" stroke-width="1.5"/>`
+       + `<text x="${xt}" y="10" text-anchor="middle" font-size="10" font-weight="700" fill="var(--danger)">Today</text>`;
+
+    ['RE', 'LE'].forEach(eye => {
+      const a = A[eye], yInj = rows[eye].inj, yRev = rows[eye].rev;
+      if (!a.evs.length){
+        g += `<text x="${Math.max(8, xt - 150)}" y="${yInj + 4}" font-size="11" fill="var(--muted)">No ${eye} data</text>`;
+        return;
+      }
+      a.injs.forEach(i => { g += `<line x1="${X(i.day)}" x2="${X(i.day)}" y1="${yInj}" y2="${yRev + 8}" stroke="var(--accent)" stroke-opacity=".35" stroke-dasharray="2 3"/>`; });
+      for (let i = 1; i < a.injs.length; i++){
+        const x1 = X(a.injs[i-1].day), x2 = X(a.injs[i].day);
+        g += `<line x1="${x1 + 7}" x2="${x2 - 7}" y1="${yInj}" y2="${yInj}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>`
+           + `<text x="${(x1 + x2) / 2}" y="${yInj - 9}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">${wd(a.injs[i].day - a.injs[i-1].day)}</text>`;
+      }
+      if (a.lastInj){
+        let prev = a.lastInj.day;
+        a.future.forEach((f, k) => {
+          const sh = a.shift[k] || 0, kept = !sh && a.shift.slice(0, k).some(x => x);
+          const lc = sh ? 'var(--danger)' : kept ? 'var(--dry)' : 'var(--accent)';
+          const x1 = X(prev), x2 = X(f);
+          g += `<rect x="${X(f - 14)}" y="${yRev - 7}" width="${X(f - 7) - X(f - 14)}" height="14" rx="3" fill="var(--accent-soft)" fill-opacity=".6"/>`;
+          g += `<rect x="${X(f - 7)}" y="${yRev - 9}" width="${X(f + 1) - X(f - 7)}" height="18" rx="3" fill="var(--accent-soft)" stroke="var(--accent)" stroke-opacity=".5" stroke-dasharray="3 2"/>`
+             + `<line x1="${x1 + 7}" x2="${x2 - 8}" y1="${yInj}" y2="${yInj}" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="5 4"/>`
+             + `<text x="${(x1 + x2) / 2}" y="${yInj - 9}" text-anchor="middle" font-size="11" font-weight="700" fill="${lc}">${wd(f - prev)}${k === 0 ? ' planned' : ''}</text>`
+             + `<circle cx="${x2}" cy="${yInj}" r="6" fill="var(--surface)" stroke="${isClosed(f) ? 'var(--danger)' : 'var(--accent)'}" stroke-width="2" stroke-dasharray="3 2"/>`
+             + `<text x="${x2}" y="${yInj + 20}" text-anchor="middle" font-size="10" fill="var(--accent)">${fmtMed(f).replace(/ \d{4}$/, '')}</text>`;
+          prev = f;
+        });
+      }
+      a.injs.forEach(i => {
+        const x = X(i.day);
+        g += `<circle cx="${x}" cy="${yInj}" r="6" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`
+           + `<text x="${x}" y="${yInj + 20}" text-anchor="middle" font-size="10" fill="var(--muted)">#${i.n}</text>`;
+      });
+      a.evs.filter(x => x.type === 'rev').forEach(r => {
+        const prev = a.injs.filter(i => i.day < r.day).pop();
+        const xr = X(r.day), c = stCol(r.status);
+        if (prev){
+          const xp = X(prev.day);
+          g += `<rect x="${xp}" y="${yRev - 4}" width="${Math.max(0, xr - xp)}" height="8" rx="4" fill="${c}" fill-opacity=".8"/>`
+             + `<text x="${(xp + xr) / 2}" y="${yRev - 10}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">${wd(r.day - prev.day)}</text>`;
+        }
+        g += `<rect x="${xr - 5}" y="${yRev - 5}" width="10" height="10" transform="rotate(45 ${xr} ${yRev})" fill="${c}" stroke="var(--surface)" stroke-width="1.5"/>`;
+      });
+    });
+
+    box.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block" role="img" aria-label="Timeline for both eyes">${g}</svg>`;
+    box.scrollLeft = Math.max(0, xt - box.clientWidth * 0.5);
+
+  }
+
+  function getClinicDay(){
+    const lastRev = state.reviews.slice().sort((x, y) => x.day - y.day).pop();
+    return dayChoice !== undefined ? dayChoice : lastRev ? new Date(lastRev.day * DAY).getUTCDay() : null;
+  }
+
+  // ---- Date calculator ----
+  let kMode = 'weeks', kOpen = false;
+  function renderCalc(){
+    $('kToggle').setAttribute('aria-expanded', kOpen);
+    $('kBody').classList.toggle('hidden', !kOpen);
+    $('kSub').classList.toggle('hidden', kOpen);
+    document.querySelectorAll('#kMode button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === kMode));
+    $('kWeeksF').classList.toggle('hidden', kMode !== 'weeks');
+    $('kDateF').classList.toggle('hidden', kMode !== 'date');
+    if (!kOpen) return;
+    const t = todayNum(), cd = getClinicDay();
+    let d;
+    if (kMode === 'weeks'){
+      if (!$('kFrom').value){ $('kOut').innerHTML = '<p class="empty">Choose a start date.</p>'; return; }
+      const w = Math.max(0, Math.min(104, Math.round(Number($('kWeeks').value) || 0)));
+      d = dayNum($('kFrom').value) + w * 7;
+    } else {
+      if (!$('kDate').value){ $('kOut').innerHTML = '<p class="empty">Choose a date.</p>'; return; }
+      d = dayNum($('kDate').value);
+    }
+    const diff = d - t;
+    const relTxt = diff === 0 ? 'Today' : `${diff > 0 ? 'In ' : ''}${wdLong(diff)}${diff < 0 ? ' ago' : ''} (${Math.abs(diff)} day${Math.abs(diff) === 1 ? '' : 's'})`;
+    const c = closureFor(d);
+    const dow = new Date(d * DAY).getUTCDay();
+    const offDay = cd != null && dow !== cd;
+    let st = c ? `<span class="calc-st closed">Clinic closed: ${esc(closureName(c))}</span>`
+               : offDay ? `<span class="calc-st warn">Open, but not a ${DAYS[cd]}</span>`
+               : `<span class="calc-st open">Clinic open</span>`;
+    // nearest open clinic day either side, when this one doesn't work
+    let alt = '';
+    if (c || offDay){
+      const ok = x => !isClosed(x) && (cd == null || new Date(x * DAY).getUTCDay() === cd);
+      const find = dir => { for (let k = 1; k <= 120; k++){ const x = d + dir * k; if (dir < 0 && x < t) return null; if (ok(x)) return x; } return null; };
+      const b1 = find(-1), a1 = find(1);
+      const part = x => `${fmtDM(x)} (${x < d ? '&minus;' : '+'}${wd(Math.abs(x - d))})`;
+      const opts = [b1, a1].filter(x => x != null).map(part);
+      if (opts.length) alt = `<p class="calc-alt">Nearest open${cd != null ? ' ' + DAYS[cd] : ' day'}: ${opts.join(' or ')}</p>`;
+    }
+    $('kOut').innerHTML = `<p class="calc-date">${fmtLong(d)}</p><p class="calc-rel">${relTxt}</p>${st}${alt}`;
+  }
+
+  function renderSuggest(){
+    const t = todayNum();
+    const A = {RE: analyse('RE'), LE: analyse('LE')};
+    const eyes = ['RE', 'LE'].filter(e => A[e].lastInj);
+    if (!eyes.length){ $('sgPanel').classList.add('hidden'); return; }
+    $('sgPanel').classList.remove('hidden');
+    // Only plan as far as both eyes have projected injections, so a single-eye review
+    // isn't suggested where the other eye's schedule simply hasn't been projected.
+    const lastRev = state.reviews.slice().sort((x, y) => x.day - y.day).pop();
+    const fromReview = dayChoice === undefined && lastRev;
+    const clinicDay = getClinicDay();
+    $('sgDay').value = clinicDay == null ? '' : String(clinicDay);
+    const cutoff = eyes.length === 2 ? Math.min(A.RE.futureAll[11], A.LE.futureAll[11]) : Infinity;
+    const dow = d => new Date(d * DAY).getUTCDay();
+    // open clinic days in [a1, b1] that are today or later
+    const openDays = (a1, b1) => {
+      const r = [];
+      for (let d = Math.max(a1, t); d <= b1; d++){
+        if (clinicDay != null && dow(d) !== clinicDay) continue;
+        if (isClosed(d)) continue;
+        r.push(d);
+      }
+      return r;
+    };
+    const wins = [];
+    eyes.forEach(e => A[e].futureAll.forEach((f, k) => {
+      if (f > cutoff) return;
+      wins.push({eye: e, n: A[e].lastInj.n + k + 1, f, pref: openDays(f - 7, f), acc: openDays(f - 14, f - 8)});
+    }));
+    $('sgNote').textContent = clinicDay == null
+      ? "Each range is the week up to and including an injection day, skipping clinic closures. A review 8–14 days before (orange) is acceptable."
+      : `${fromReview ? `${DAYS[clinicDay]}, from the last review. ` : ''}Each date is a ${DAYS[clinicDay]} in the week up to and including an injection day, skipping clinic closures. A review 8–14 days before (orange) is acceptable.`;
+    // Take injections in date order; review in the preferred week (or, if the clinic is closed then,
+    // the week before), and fold in the other eye if the same day is in its preferred week.
+    wins.sort((x, y) => x.f - y.f);
+    const used = new Set(), groups = [];
+    wins.forEach((w, i) => {
+      if (used.has(i)) return;
+      used.add(i);
+      const overdue = w.f < t;
+      let C = [], fallback = false;
+      if (!overdue){ C = w.pref; if (!C.length){ C = w.acc; fallback = true; } }
+      const members = [w];
+      if (C.length) wins.forEach((v, j) => {
+        if (used.has(j) || v.eye === w.eye) return;
+        const I = C.filter(d => v.pref.includes(d));
+        if (I.length){ C = I; members.push(v); used.add(j); }
+      });
+      groups.push({members, days: C, s: C.length ? C[0] : null, e: C.length ? C[C.length - 1] : null,
+                   overdue, fallback, none: !overdue && !C.length});
+    });
+    // With a fixed clinic day, give each available date its own entry (not "X or Y"), in date order
+    if (clinicDay != null){
+      for (let i = groups.length - 1; i >= 0; i--){
+        const g = groups[i];
+        if (g.days.length > 1) groups.splice(i, 1, ...g.days.map(d => ({...g, days: [d], s: d, e: d})));
+      }
+    }
+    groups.sort((x, y) => (x.s ?? x.members[0].f) - (y.s ?? y.members[0].f));
+    groups.splice(6);   // show the next 6 review dates
+    // "N days before RE/LE injection" for a review on day d (or a range sd..ed)
+    const daysLines = (sd, ed) => '<span class="sg-days">' + eyes.map(eye => {
+      const k = A[eye].futureAll.findIndex(x => x >= ed);
+      if (k < 0) return '';
+      const f = A[eye].futureAll[k];
+      const lo = f - ed, hi = f - sd;
+      const cls = lo <= 7 ? 'g' : lo <= 14 ? 'o' : 'r';
+      const same = lo === 0 && hi === 0;
+      const txt = same ? 'Same day' : lo === hi ? `${lo} day${lo === 1 ? '' : 's'}` : `${lo}–${hi} days`;
+      return `<span><span class="dchip ${cls}">${txt}</span> ${same ? 'as' : 'before'} ${k + 1}${['st', 'nd', 'rd'][k] || 'th'} upcoming ${eye} injection</span>`;
+    }).join('') + '</span>';
+    const optional = {};
+    $('sgList').innerHTML = groups.map((g, gi) => {
+      // If the next visit is for the other eye only and starts within a week, a small move would merge them
+      let hint = '';
+      const nx = groups[gi + 1];
+      if (g.days.length && nx && nx.days.length && g.members.length === 1 && nx.members.length === 1 && nx.members[0].eye !== g.members[0].eye){
+        const a1 = g.members[0], b1 = nx.members[0];
+        // One visit in this eye's preferred week, reviewing the other eye 8-14 days before its injection
+        const altS = Math.max(g.s, b1.f - 14, t), altE = g.e;
+        if (altS <= altE){
+          // this visit can also cover the other eye (8-14 days early), so the next visit becomes optional
+          optional[gi + 1] = altS === altE ? fmtDM(altE) : fmtRange(altS, altE);
+          hint = ' ';
+        }
+        const earlier = b1.f - (g.e + 7);      // move later eye's injection so its window reaches this review
+        const later = nx.s - a1.f;         // or move this eye's injection so its window reaches the next review
+        if (!hint && earlier > 0 && later > 0 && Math.min(earlier, later) <= 7){
+          hint = `<span class="sg-hint">Moving ${b1.eye} #${b1.n} ${wd(earlier)} earlier, or ${a1.eye} #${a1.n} ${wd(later)} later, would let one review cover both.</span>`;
+        }
+      }
+      if (g.overdue || g.none){
+        const w = g.members[0];
+        const msg = g.overdue ? 'As soon as possible' : 'No open clinic';
+        const why = g.overdue ? `(injection was due ${wdLong(t - w.f)} ago)` : '(clinic closed for the 2 weeks up to it)';
+        return `<li><span class="sg-date">${msg} <span class="up-rel overdue">${why}</span></span>
+          <span class="sg-note r">${w.eye} #${w.n} is due ${fmtDM(w.f)}</span>${g.overdue ? daysLines(t, t) : ''}</li>`;
+      }
+      let range = g.s === g.e ? fmtDM(g.e) : fmtRange(g.s, g.e);
+      if (g.s !== g.e){
+        const shut = [];
+        for (let d = g.s; d <= g.e; d++) if (isClosed(d)) shut.push(fmtDM(d));
+        if (shut.length) range += ` <span class="up-rel" style="color:var(--muted)">except ${shut.join(', ')}</span>`;
+      }
+      const relTxt = g.s > t ? relLong(g.s - t) : 'open now';
+      const cls = g.s - t <= 7 ? 'soon' : '';
+      const both = g.members.length > 1 ? '<span class="sg-both">Both eyes</span>' : '';
+      const fb = g.fallback ? `<span class="sg-note o">Clinic closed in the week up to ${g.members[0].eye} #${g.members[0].n}</span>` : '';
+      return `<li><span class="sg-date">${range} <span class="up-rel ${cls}">(${relTxt})</span>${both}</span>
+        ${fb}${daysLines(g.s, g.e)}${hint.trim()}</li>`;
+    }).join('');
+  }
+
+  const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  $('sgDay').addEventListener('change', e => {
+    dayChoice = e.target.value === '' ? null : Number(e.target.value);
+    renderSuggest();
+  });
+
+  // ---- Patient code: the essentials as a few words (nothing is stored anywhere) ----
+  // Words: EFF large diceware list (Joseph Bonneau, CC BY 3.0 US), without its 4 hyphenated words.
+  // FROZEN. Never add, remove or reorder a word, or codes already written in notes stop working.
+  const CODE_WORDLIST = 'abacus abdomen abdominal abide abiding ability ablaze able abnormal abrasion abrasive abreast abridge abroad abruptly absence absentee absently absinthe absolute absolve abstain abstract absurd accent acclaim acclimate accompany account accuracy accurate accustom acetone achiness aching acid acorn acquaint acquire acre acrobat acronym acting action activate activator active activism activist activity actress acts acutely acuteness aeration aerobics aerosol aerospace afar affair affected affecting affection affidavit affiliate affirm affix afflicted affluent afford affront aflame afloat aflutter afoot afraid afterglow afterlife aftermath aftermost afternoon aged ageless agency agenda agent aggregate aghast agile agility aging agnostic agonize agonizing agony agreeable agreeably agreed agreeing agreement aground ahead ahoy aide aids aim ajar alabaster alarm albatross album alfalfa algebra algorithm alias alibi alienable alienate aliens alike alive alkaline alkalize almanac almighty almost aloe aloft aloha alone alongside aloof alphabet alright although altitude alto aluminum alumni always amaretto amaze amazingly amber ambiance ambiguity ambiguous ambition ambitious ambulance ambush amendable amendment amends amenity amiable amicably amid amigo amino amiss ammonia ammonium amnesty amniotic among amount amperage ample amplifier amplify amply amuck amulet amusable amused amusement amuser amusing anaconda anaerobic anagram anatomist anatomy anchor anchovy ancient android anemia anemic aneurism anew angelfish angelic anger angled angler angles angling angrily angriness anguished angular animal animate animating animation animator anime animosity ankle annex annotate announcer annoying annually annuity anointer another answering antacid antarctic anteater antelope antennae anthem anthill anthology antibody antics antidote antihero antiquely antiques antiquity antirust antitoxic antitrust antiviral antivirus antler antonym antsy anvil anybody anyhow anymore anyone anyplace anything anytime anyway anywhere aorta apache apostle appealing appear appease appeasing appendage appendix appetite appetizer applaud applause apple appliance applicant applied apply appointee appraisal appraiser apprehend approach approval approve apricot april apron aptitude aptly aqua aqueduct arbitrary arbitrate ardently area arena arguable arguably argue arise armadillo armband armchair armed armful armhole arming armless armoire armored armory armrest army aroma arose around arousal arrange array arrest arrival arrive arrogance arrogant arson art ascend ascension ascent ascertain ashamed ashen ashes ashy aside askew asleep asparagus aspect aspirate aspire aspirin astonish astound astride astrology astronaut astronomy astute atlantic atlas atom atonable atop atrium atrocious atrophy attach attain attempt attendant attendee attention attentive attest attic attire attitude attractor attribute atypical auction audacious audacity audible audibly audience audio audition augmented august authentic author autism autistic autograph automaker automated automatic autopilot available avalanche avatar avenge avenging avenue average aversion avert aviation aviator avid avoid await awaken award aware awhile awkward awning awoke awry axis babble babbling babied baboon backache backboard backboned backdrop backed backer backfield backfire backhand backing backlands backlash backless backlight backlit backlog backpack backpedal backrest backroom backshift backside backslid backspace backspin backstab backstage backtalk backtrack backup backward backwash backwater backyard bacon bacteria bacterium badass badge badland badly badness baffle baffling bagel bagful baggage bagged baggie bagginess bagging baggy bagpipe baguette baked bakery bakeshop baking balance balancing balcony balmy balsamic bamboo banana banish banister banjo bankable bankbook banked banker banking banknote bankroll banner bannister banshee banter barbecue barbed barbell barber barcode barge bargraph barista baritone barley barmaid barman barn barometer barrack barracuda barrel barrette barricade barrier barstool bartender barterer bash basically basics basil basin basis basket batboy batch bath baton bats battalion battered battering battery batting battle bauble bazooka blabber bladder blade blah blame blaming blanching blandness blank blaspheme blasphemy blast blatancy blatantly blazer blazing bleach bleak bleep blemish blend bless blighted blimp bling blinked blinker blinking blinks blip blissful blitz blizzard bloated bloating blob blog bloomers blooming blooper blot blouse blubber bluff bluish blunderer blunt blurb blurred blurry blurt blush blustery boaster boastful boasting boat bobbed bobbing bobble bobcat bobsled bobtail bodacious body bogged boggle bogus boil bok bolster bolt bonanza bonded bonding bondless boned bonehead boneless bonelike boney bonfire bonnet bonsai bonus bony boogeyman boogieman book boondocks booted booth bootie booting bootlace bootleg boots boozy borax boring borough borrower borrowing boss botanical botanist botany botch both bottle bottling bottom bounce bouncing bouncy bounding boundless bountiful bovine boxcar boxer boxing boxlike boxy breach breath breeches breeching breeder breeding breeze breezy brethren brewery brewing briar bribe brick bride bridged brigade bright brilliant brim bring brink brisket briskly briskness bristle brittle broadband broadcast broaden broadly broadness broadside broadways broiler broiling broken broker bronchial bronco bronze bronzing brook broom brought browbeat brownnose browse browsing bruising brunch brunette brunt brush brussels brute brutishly bubble bubbling bubbly buccaneer bucked bucket buckle buckshot buckskin bucktooth buckwheat buddhism buddhist budding buddy budget buffalo buffed buffer buffing buffoon buggy bulb bulge bulginess bulgur bulk bulldog bulldozer bullfight bullfrog bullhorn bullion bullish bullpen bullring bullseye bullwhip bully bunch bundle bungee bunion bunkbed bunkhouse bunkmate bunny bunt busboy bush busily busload bust busybody buzz cabana cabbage cabbie cabdriver cable caboose cache cackle cacti cactus caddie caddy cadet cadillac cadmium cage cahoots cake calamari calamity calcium calculate calculus caliber calibrate calm caloric calorie calzone camcorder cameo camera camisole camper campfire camping campsite campus canal canary cancel candied candle candy cane canine canister cannabis canned canning cannon cannot canola canon canopener canopy canteen canyon capable capably capacity cape capillary capital capitol capped capricorn capsize capsule caption captivate captive captivity capture caramel carat caravan carbon cardboard carded cardiac cardigan cardinal cardstock carefully caregiver careless caress caretaker cargo caring carless carload carmaker carnage carnation carnival carnivore carol carpenter carpentry carpool carport carried carrot carrousel carry cartel cartload carton cartoon cartridge cartwheel carve carving carwash cascade case cash casing casino casket cassette casually casualty catacomb catalog catalyst catalyze catapult cataract catatonic catcall catchable catcher catching catchy caterer catering catfight catfish cathedral cathouse catlike catnap catnip catsup cattail cattishly cattle catty catwalk caucasian caucus causal causation cause causing cauterize caution cautious cavalier cavalry caviar cavity cedar celery celestial celibacy celibate celtic cement census ceramics ceremony certainly certainty certified certify cesarean cesspool chafe chaffing chain chair chalice challenge chamber chamomile champion chance change channel chant chaos chaperone chaplain chapped chaps chapter character charbroil charcoal charger charging chariot charity charm charred charter charting chase chasing chaste chastise chastity chatroom chatter chatting chatty cheating cheddar cheek cheer cheese cheesy chef chemicals chemist chemo cherisher cherub chess chest chevron chevy chewable chewer chewing chewy chief chihuahua childcare childhood childish childless childlike chili chill chimp chip chirping chirpy chitchat chivalry chive chloride chlorine choice chokehold choking chomp chooser choosing choosy chop chosen chowder chowtime chrome chubby chuck chug chummy chump chunk churn chute cider cilantro cinch cinema cinnamon circle circling circular circulate circus citable citadel citation citizen citric citrus city civic civil clad claim clambake clammy clamor clamp clamshell clang clanking clapped clapper clapping clarify clarinet clarity clash clasp class clatter clause clavicle claw clay clean clear cleat cleaver cleft clench clergyman clerical clerk clever clicker client climate climatic cling clinic clinking clip clique cloak clobber clock clone cloning closable closure clothes clothing cloud clover clubbed clubbing clubhouse clump clumsily clumsy clunky clustered clutch clutter coach coagulant coastal coaster coasting coastland coastline coat coauthor cobalt cobbler cobweb cocoa coconut cod coeditor coerce coexist coffee cofounder cognition cognitive cogwheel coherence coherent cohesive coil coke cola cold coleslaw coliseum collage collapse collar collected collector collide collie collision colonial colonist colonize colony colossal colt coma come comfort comfy comic coming comma commence commend comment commerce commode commodity commodore common commotion commute commuting compacted compacter compactly compactor companion company compare compel compile comply component composed composer composite compost composure compound compress comprised computer computing comrade concave conceal conceded concept concerned concert conch concierge concise conclude concrete concur condense condiment condition condone conducive conductor conduit cone confess confetti confidant confident confider confiding configure confined confining confirm conflict conform confound confront confused confusing confusion congenial congested congrats congress conical conjoined conjure conjuror connected connector consensus consent console consoling consonant constable constant constrain constrict construct consult consumer consuming contact container contempt contend contented contently contents contest context contort contour contrite control contusion convene convent copartner cope copied copier copilot coping copious copper copy coral cork cornball cornbread corncob cornea corned corner cornfield cornflake cornhusk cornmeal cornstalk corny coronary coroner corporal corporate corral correct corridor corrode corroding corrosive corsage corset cortex cosigner cosmetics cosmic cosmos cosponsor cost cottage cotton couch cough could countable countdown counting countless country county courier covenant cover coveted coveting coyness cozily coziness cozy crabbing crabgrass crablike crabmeat cradle cradling crafter craftily craftsman craftwork crafty cramp cranberry crane cranial cranium crank crate crave craving crawfish crawlers crawling crayfish crayon crazed crazily craziness crazy creamed creamer creamlike crease creasing creatable create creation creative creature credible credibly credit creed creme creole crepe crept crescent crested cresting crestless crevice crewless crewman crewmate crib cricket cried crier crimp crimson cringe cringing crinkle crinkly crisped crisping crisply crispness crispy criteria critter croak crock crook croon crop cross crouch crouton crowbar crowd crown crucial crudely crudeness cruelly cruelness cruelty crumb crummiest crummy crumpet crumpled cruncher crunching crunchy crusader crushable crushed crusher crushing crust crux crying cryptic crystal cubbyhole cube cubical cubicle cucumber cuddle cuddly cufflink culinary culminate culpable culprit cultivate cultural culture cupbearer cupcake cupid cupped cupping curable curator curdle cure curfew curing curled curler curliness curling curly curry curse cursive cursor curtain curtly curtsy curvature curve curvy cushy cusp cussed custard custodian custody customary customer customize customs cut cycle cyclic cycling cyclist cylinder cymbal cytoplasm cytoplast dab dad daffodil dagger daily daintily dainty dairy daisy dallying dance dancing dandelion dander dandruff dandy danger dangle dangling daredevil dares daringly darkened darkening darkish darkness darkroom darling darn dart darwinism dash dastardly data datebook dating daughter daunting dawdler dawn daybed daybreak daycare daydream daylight daylong dayroom daytime dazzler dazzling deacon deafening deafness dealer dealing dealmaker dealt dean debatable debate debating debit debrief debtless debtor debug debunk decade decaf decal decathlon decay deceased deceit deceiver deceiving december decency decent deception deceptive decibel decidable decimal decimeter decipher deck declared decline decode decompose decorated decorator decoy decrease decree dedicate dedicator deduce deduct deed deem deepen deeply deepness deface defacing defame default defeat defection defective defendant defender defense defensive deferral deferred defiance defiant defile defiling define definite deflate deflation deflator deflected deflector defog deforest defraud defrost deftly defuse defy degraded degrading degrease degree dehydrate deity dejected delay delegate delegator delete deletion delicacy delicate delicious delighted delirious delirium deliverer delivery delouse delta deluge delusion deluxe demanding demeaning demeanor demise democracy democrat demote demotion demystify denatured deniable denial denim denote dense density dental dentist denture deny deodorant deodorize departed departure depict deplete depletion deplored deploy deport depose depraved depravity deprecate depress deprive depth deputize deputy derail deranged derby derived desecrate deserve deserving designate designed designer designing deskbound desktop deskwork desolate despair despise despite destiny destitute destruct detached detail detection detective detector detention detergent detest detonate detonator detoxify detract deuce devalue deviancy deviant deviate deviation deviator device devious devotedly devotee devotion devourer devouring devoutly dexterity dexterous diabetes diabetic diabolic diagnoses diagnosis diagram dial diameter diaper diaphragm diary dice dicing dictate dictation dictator difficult diffused diffuser diffusion diffusive dig dilation diligence diligent dill dilute dime diminish dimly dimmed dimmer dimness dimple diner dingbat dinghy dinginess dingo dingy dining dinner diocese dioxide diploma dipped dipper dipping directed direction directive directly directory direness dirtiness disabled disagree disallow disarm disarray disaster disband disbelief disburse discard discern discharge disclose discolor discount discourse discover discuss disdain disengage disfigure disgrace dish disinfect disjoin disk dislike disliking dislocate dislodge disloyal dismantle dismay dismiss dismount disobey disorder disown disparate disparity dispatch dispense dispersal dispersed disperser displace display displease disposal dispose disprove dispute disregard disrupt dissuade distance distant distaste distill distinct distort distract distress district distrust ditch ditto ditzy dividable divided dividend dividers dividing divinely diving divinity divisible divisibly division divisive divorcee dizziness dizzy doable docile dock doctrine document dodge dodgy doily doing dole dollar dollhouse dollop dolly dolphin domain domelike domestic dominion dominoes donated donation donator donor donut doodle doorbell doorframe doorknob doorman doormat doornail doorpost doorstep doorstop doorway doozy dork dormitory dorsal dosage dose dotted doubling douche dove down dowry doze drab dragging dragonfly dragonish dragster drainable drainage drained drainer drainpipe dramatic dramatize drank drapery drastic draw dreaded dreadful dreadlock dreamboat dreamily dreamland dreamless dreamlike dreamt dreamy drearily dreary drench dress drew dribble dried drier drift driller drilling drinkable drinking dripping drippy drivable driven driver driveway driving drizzle drizzly drone drool droop dropbox dropkick droplet dropout dropper drove drown drowsily drudge drum dry dubbed dubiously duchess duckbill ducking duckling ducktail ducky duct dude duffel dugout duh duke duller dullness duly dumping dumpling dumpster duo dupe duplex duplicate duplicity durable durably duration duress during dusk dust dutiful duty duvet dwarf dweeb dwelled dweller dwelling dwindle dwindling dynamic dynamite dynasty dyslexia dyslexic each eagle earache eardrum earflap earful earlobe early earmark earmuff earphone earpiece earplugs earring earshot earthen earthlike earthling earthly earthworm earthy earwig easeful easel easiest easily easiness easing eastbound eastcoast easter eastward eatable eaten eatery eating eats ebay ebony ebook ecard eccentric echo eclair eclipse ecologist ecology economic economist economy ecosphere ecosystem edge edginess edging edgy edition editor educated education educator eel effective effects efficient effort eggbeater egging eggnog eggplant eggshell egomaniac egotism egotistic either eject elaborate elastic elated elbow eldercare elderly eldest electable election elective elephant elevate elevating elevation elevator eleven elf eligible eligibly eliminate elite elitism elixir elk ellipse elliptic elm elongated elope eloquence eloquent elsewhere elude elusive elves email embargo embark embassy embattled embellish ember embezzle emblaze emblem embody embolism emboss embroider emcee emerald emergency emission emit emote emoticon emotion empathic empathy emperor emphases emphasis emphasize emphatic empirical employed employee employer emporium empower emptier emptiness empty emu enable enactment enamel enchanted enchilada encircle enclose enclosure encode encore encounter encourage encroach encrust encrypt endanger endeared endearing ended ending endless endnote endocrine endorphin endorse endowment endpoint endurable endurance enduring energetic energize energy enforced enforcer engaged engaging engine engorge engraved engraver engraving engross engulf enhance enigmatic enjoyable enjoyably enjoyer enjoying enjoyment enlarged enlarging enlighten enlisted enquirer enrage enrich enroll enslave ensnare ensure entail entangled entering entertain enticing entire entitle entity entomb entourage entrap entree entrench entrust entryway entwine enunciate envelope enviable enviably envious envision envoy envy enzyme epic epidemic epidermal epidermis epidural epilepsy epileptic epilogue epiphany episode equal equate equation equator equinox equipment equity equivocal eradicate erasable erased eraser erasure ergonomic errand errant erratic error erupt escalate escalator escapable escapade escapist escargot eskimo esophagus espionage espresso esquire essay essence essential establish estate esteemed estimate estimator estranged estrogen etching eternal eternity ethanol ether ethically ethics euphemism evacuate evacuee evade evaluate evaluator evaporate evasion evasive even everglade evergreen everybody everyday everyone evict evidence evident evil evoke evolution evolve exact exalted example excavate excavator exceeding exception excess exchange excitable exciting exclaim exclude excluding exclusion exclusive excretion excretory excursion excusable excusably excuse exemplary exemplify exemption exerciser exert exes exfoliate exhale exhaust exhume exile existing exit exodus exonerate exorcism exorcist expand expanse expansion expansive expectant expedited expediter expel expend expenses expensive expert expire expiring explain expletive explicit explode exploit explore exploring exponent exporter exposable expose exposure express expulsion exquisite extended extending extent extenuate exterior external extinct extortion extradite extras extrovert extrude extruding exuberant fable fabric fabulous facebook facecloth facedown faceless facelift faceplate faceted facial facility facing facsimile faction factoid factor factsheet factual faculty fade fading failing falcon fall false falsify fame familiar family famine famished fanatic fancied fanciness fancy fanfare fang fanning fantasize fantastic fantasy fascism fastball faster fasting fastness faucet favorable favorably favored favoring favorite fax feast federal fedora feeble feed feel feisty feline feminine feminism feminist feminize femur fence fencing fender ferment fernlike ferocious ferocity ferret ferris ferry fervor fester festival festive festivity fetal fetch fever fiber fiction fiddle fiddling fidelity fidgeting fidgety fifteen fifth fiftieth fifty figment figure figurine filing filled filler filling film filter filth filtrate finale finalist finalize finally finance financial finch fineness finer finicky finished finisher finishing finite finless finlike fiscally fit five flaccid flagman flagpole flagship flagstick flagstone flail flakily flaky flame flammable flanked flanking flannels flap flaring flashback flashbulb flashcard flashily flashing flashy flask flatbed flatfoot flatly flatness flatten flattered flatterer flattery flattop flatware flatworm flavored flavorful flavoring flaxseed fled fleshed fleshy flick flier flight flinch fling flint flip flirt float flock flogging flop floral florist floss flounder flyable flyaway flyer flying flyover flypaper foam foe fog foil folic folk follicle follow fondling fondly fondness fondue font food fool footage football footbath footboard footer footgear foothill foothold footing footless footman footnote footpad footpath footprint footrest footsie footsore footwear footwork fossil foster founder founding fountain fox foyer fraction fracture fragile fragility fragment fragrance fragrant frail frame framing frantic fraternal frayed fraying frays freckled freckles freebase freebee freebie freedom freefall freehand freeing freeload freely freemason freeness freestyle freeware freeway freewill freezable freezing freight french frenzied frenzy frequency frequent fresh fretful fretted friction friday fridge fried friend frighten frightful frigidity frigidly frill fringe frisbee frisk fritter frivolous frolic from front frostbite frosted frostily frosting frostlike frosty froth frown frozen fructose frugality frugally fruit frustrate frying gab gaffe gag gainfully gaining gains gala gallantly galleria gallery galley gallon gallows gallstone galore galvanize gambling game gaming gamma gander gangly gangrene gangway gap garage garbage garden gargle garland garlic garment garnet garnish garter gas gatherer gathering gating gauging gauntlet gauze gave gawk gazing gear gecko geek geiger gem gender generic generous genetics genre gentile gentleman gently gents geography geologic geologist geology geometric geometry geranium gerbil geriatric germicide germinate germless germproof gestate gestation gesture getaway getting getup giant gibberish giblet giddily giddiness giddy gift gigabyte gigahertz gigantic giggle giggling giggly gigolo gilled gills gimmick girdle giveaway given giver giving gizmo gizzard glacial glacier glade gladiator gladly glamorous glamour glance glancing glandular glare glaring glass glaucoma glazing gleaming gleeful glider gliding glimmer glimpse glisten glitch glitter glitzy gloater gloating gloomily gloomy glorified glorifier glorify glorious glory gloss glove glowing glowworm glucose glue gluten glutinous glutton gnarly gnat goal goatskin goes goggles going goldfish goldmine goldsmith golf goliath gonad gondola gone gong good gooey goofball goofiness goofy google goon gopher gore gorged gorgeous gory gosling gossip gothic gotten gout gown grab graceful graceless gracious gradation graded grader gradient grading gradually graduate graffiti grafted grafting grain granddad grandkid grandly grandma grandpa grandson granite granny granola grant granular grape graph grapple grappling grasp grass gratified gratify grating gratitude gratuity gravel graveness graves graveyard gravitate gravity gravy gray grazing greasily greedily greedless greedy green greeter greeting grew greyhound grid grief grievance grieving grievous grill grimace grimacing grime griminess grimy grinch grinning grip gristle grit groggily groggy groin groom groove grooving groovy grope ground grouped grout grove grower growing growl grub grudge grudging grueling gruffly grumble grumbling grumbly grumpily grunge grunt guacamole guidable guidance guide guiding guileless guise gulf gullible gully gulp gumball gumdrop gumminess gumming gummy gurgle gurgling guru gush gusto gusty gutless guts gutter guy guzzler gyration habitable habitant habitat habitual hacked hacker hacking hacksaw had haggler haiku half halogen halt halved halves hamburger hamlet hammock hamper hamster hamstring handbag handball handbook handbrake handcart handclap handclasp handcraft handcuff handed handful handgrip handgun handheld handiness handiwork handlebar handled handler handling handmade handoff handpick handprint handrail handsaw handset handsfree handshake handstand handwash handwork handwoven handwrite handyman hangnail hangout hangover hangup hankering hankie hanky haphazard happening happier happiest happily happiness happy harbor hardcopy hardcore hardcover harddisk hardened hardener hardening hardhat hardhead hardiness hardly hardness hardship hardware hardwired hardwood hardy harmful harmless harmonica harmonics harmonize harmony harness harpist harsh harvest hash hassle haste hastily hastiness hasty hatbox hatchback hatchery hatchet hatching hatchling hate hatless hatred haunt haven hazard hazelnut hazily haziness hazing hazy headache headband headboard headcount headdress headed header headfirst headgear heading headlamp headless headlock headphone headpiece headrest headroom headscarf headset headsman headstand headstone headway headwear heap heat heave heavily heaviness heaving hedge hedging heftiness hefty helium helmet helper helpful helping helpless helpline hemlock hemstitch hence henchman henna herald herbal herbicide herbs heritage hermit heroics heroism herring herself hertz hesitancy hesitant hesitate hexagon hexagram hubcap huddle huddling huff hug hula hulk hull human humble humbling humbly humid humiliate humility humming hummus humongous humorist humorless humorous humpback humped humvee hunchback hundredth hunger hungrily hungry hunk hunter hunting huntress huntsman hurdle hurled hurler hurling hurray hurricane hurried hurry hurt husband hush husked huskiness hut hybrid hydrant hydrated hydration hydrogen hydroxide hyperlink hypertext hyphen hypnoses hypnosis hypnotic hypnotism hypnotist hypnotize hypocrisy hypocrite ibuprofen ice iciness icing icky icon icy idealism idealist idealize ideally idealness identical identify identity ideology idiocy idiom idly igloo ignition ignore iguana illicitly illusion illusive image imaginary imagines imaging imbecile imitate imitation immature immerse immersion imminent immobile immodest immorally immortal immovable immovably immunity immunize impaired impale impart impatient impeach impeding impending imperfect imperial impish implant implement implicate implicit implode implosion implosive imply impolite important importer impose imposing impotence impotency impotent impound imprecise imprint imprison impromptu improper improve improving improvise imprudent impulse impulsive impure impurity iodine iodize ion ipad iphone ipod irate irk iron irregular irrigate irritable irritably irritant irritate islamic islamist isolated isolating isolation isotope issue issuing italicize italics item itinerary itunes ivory ivy jab jackal jacket jackknife jackpot jailbird jailbreak jailer jailhouse jalapeno jam janitor january jargon jarring jasmine jaundice jaunt java jawed jawless jawline jaws jaybird jaywalker jazz jeep jeeringly jellied jelly jersey jester jet jiffy jigsaw jimmy jingle jingling jinx jitters jittery job jockey jockstrap jogger jogging john joining jokester jokingly jolliness jolly jolt jot jovial joyfully joylessly joyous joyride joystick jubilance jubilant judge judgingly judicial judiciary judo juggle juggling jugular juice juiciness juicy jujitsu jukebox july jumble jumbo jump junction juncture june junior juniper junkie junkman junkyard jurist juror jury justice justifier justify justly justness juvenile kabob kangaroo karaoke karate karma kebab keenly keenness keep keg kelp kennel kept kerchief kerosene kettle kick kiln kilobyte kilogram kilometer kilowatt kilt kimono kindle kindling kindly kindness kindred kinetic kinfolk king kinship kinsman kinswoman kissable kisser kissing kitchen kite kitten kitty kiwi kleenex knapsack knee knelt knickers knoll koala kooky kosher krypton kudos kung labored laborer laboring laborious labrador ladder ladies ladle ladybug ladylike lagged lagging lagoon lair lake lance landed landfall landfill landing landlady landless landline landlord landmark landmass landmine landowner landscape landside landslide language lankiness lanky lantern lapdog lapel lapped lapping laptop lard large lark lash lasso last latch late lather latitude latrine latter latticed launch launder laundry laurel lavender lavish laxative lazily laziness lazy lecturer left legacy legal legend legged leggings legible legibly legislate lego legroom legume legwarmer legwork lemon lend length lens lent leotard lesser letdown lethargic lethargy letter lettuce level leverage levers levitate levitator liability liable liberty librarian library licking licorice lid life lifter lifting liftoff ligament likely likeness likewise liking lilac lilly lily limb limeade limelight limes limit limping limpness line lingo linguini linguist lining linked linoleum linseed lint lion lip liquefy liqueur liquid lisp list litigate litigator litmus litter little livable lived lively liver livestock lividly living lizard lubricant lubricate lucid luckily luckiness luckless lucrative ludicrous lugged lukewarm lullaby lumber luminance luminous lumpiness lumping lumpish lunacy lunar lunchbox luncheon lunchroom lunchtime lung lurch lure luridness lurk lushly lushness luster lustfully lustily lustiness lustrous lusty luxurious luxury lying lyrically lyricism lyricist lyrics macarena macaroni macaw mace machine machinist magazine magenta maggot magical magician magma magnesium magnetic magnetism magnetize magnifier magnify magnitude magnolia mahogany maimed majestic majesty majorette majority makeover maker makeshift making malformed malt mama mammal mammary mammogram manager managing manatee mandarin mandate mandatory mandolin manger mangle mango mangy manhandle manhole manhood manhunt manicotti manicure manifesto manila mankind manlike manliness manly manmade manned mannish manor manpower mantis mantra manual many map marathon marauding marbled marbles marbling march mardi margarine margarita margin marigold marina marine marital maritime marlin marmalade maroon married marrow marry marshland marshy marsupial marvelous marxism mascot masculine mashed mashing massager masses massive mastiff matador matchbook matchbox matcher matching matchless material maternal maternity math mating matriarch matrimony matrix matron matted matter maturely maturing maturity mauve maverick maximize maximum maybe mayday mayflower moaner moaning mobile mobility mobilize mobster mocha mocker mockup modified modify modular modulator module moisten moistness moisture molar molasses mold molecular molecule molehill mollusk mom monastery monday monetary monetize moneybags moneyless moneywise mongoose mongrel monitor monkhood monogamy monogram monologue monopoly monorail monotone monotype monoxide monsieur monsoon monstrous monthly monument moocher moodiness moody mooing moonbeam mooned moonlight moonlike moonlit moonrise moonscape moonshine moonstone moonwalk mop morale morality morally morbidity morbidly morphine morphing morse mortality mortally mortician mortified mortify mortuary mosaic mossy most mothball mothproof motion motivate motivator motive motocross motor motto mountable mountain mounted mounting mourner mournful mouse mousiness moustache mousy mouth movable move movie moving mower mowing much muck mud mug mulberry mulch mule mulled mullets multiple multiply multitask multitude mumble mumbling mumbo mummified mummify mummy mumps munchkin mundane municipal muppet mural murkiness murky murmuring muscular museum mushily mushiness mushroom mushy music musket muskiness musky mustang mustard muster mustiness musty mutable mutate mutation mute mutilated mutilator mutiny mutt mutual muzzle myself myspace mystified mystify myth nacho nag nail name naming nanny nanometer nape napkin napped napping nappy narrow nastily nastiness national native nativity natural nature naturist nautical navigate navigator navy nearby nearest nearly nearness neatly neatness nebula nebulizer nectar negate negation negative neglector negligee negligent negotiate nemeses nemesis neon nephew nerd nervous nervy nest net neurology neuron neurosis neurotic neuter neutron never next nibble nickname nicotine niece nifty nimble nimbly nineteen ninetieth ninja nintendo ninth nuclear nuclei nucleus nugget nullify number numbing numbly numbness numeral numerate numerator numeric numerous nuptials nursery nursing nurture nutcase nutlike nutmeg nutrient nutshell nuttiness nutty nuzzle nylon oaf oak oasis oat obedience obedient obituary object obligate obliged oblivion oblivious oblong obnoxious oboe obscure obscurity observant observer observing obsessed obsession obsessive obsolete obstacle obstinate obstruct obtain obtrusive obtuse obvious occultist occupancy occupant occupier occupy ocean ocelot octagon octane october octopus ogle oil oink ointment okay old olive olympics omega omen ominous omission omit omnivore onboard oncoming ongoing onion online onlooker only onscreen onset onshore onslaught onstage onto onward onyx oops ooze oozy opacity opal open operable operate operating operation operative operator opium opossum opponent oppose opposing opposite oppressed oppressor opt opulently osmosis other otter ouch ought ounce outage outback outbid outboard outbound outbreak outburst outcast outclass outcome outdated outdoors outer outfield outfit outflank outgoing outgrow outhouse outing outlast outlet outline outlook outlying outmatch outmost outnumber outplayed outpost outpour output outrage outrank outreach outright outscore outsell outshine outshoot outsider outskirts outsmart outsource outspoken outtakes outthink outward outweigh outwit oval ovary oven overact overall overarch overbid overbill overbite overblown overboard overbook overbuilt overcast overcoat overcome overcook overcrowd overdraft overdrawn overdress overdrive overdue overeager overeater overexert overfed overfeed overfill overflow overfull overgrown overhand overhang overhaul overhead overhear overheat overhung overjoyed overkill overlabor overlaid overlap overlay overload overlook overlord overlying overnight overpass overpay overplant overplay overpower overprice overrate overreach overreact override overripe overrule overrun overshoot overshot oversight oversized oversleep oversold overspend overstate overstay overstep overstock overstuff oversweet overtake overthrow overtime overtly overtone overture overturn overuse overvalue overview overwrite owl oxford oxidant oxidation oxidize oxidizing oxygen oxymoron oyster ozone paced pacemaker pacific pacifier pacifism pacifist pacify padded padding paddle paddling padlock pagan pager paging pajamas palace palatable palm palpable palpitate paltry pampered pamperer pampers pamphlet panama pancake pancreas panda pandemic pang panhandle panic panning panorama panoramic panther pantomime pantry pants pantyhose paparazzi papaya paper paprika papyrus parabola parachute parade paradox paragraph parakeet paralegal paralyses paralysis paralyze paramedic parameter paramount parasail parasite parasitic parcel parched parchment pardon parish parka parking parkway parlor parmesan parole parrot parsley parsnip partake parted parting partition partly partner partridge party passable passably passage passcode passenger passerby passing passion passive passivism passover passport password pasta pasted pastel pastime pastor pastrami pasture pasty patchwork patchy paternal paternity path patience patient patio patriarch patriot patrol patronage patronize pauper pavement paver pavestone pavilion paving pawing payable payback paycheck payday payee payer paying payment payphone payroll pebble pebbly pecan pectin peculiar peddling pediatric pedicure pedigree pedometer pegboard pelican pellet pelt pelvis penalize penalty pencil pendant pending penholder penknife pennant penniless penny penpal pension pentagon pentagram pep perceive percent perch percolate perennial perfected perfectly perfume periscope perish perjurer perjury perkiness perky perm peroxide perpetual perplexed persecute persevere persuaded persuader pesky peso pessimism pessimist pester pesticide petal petite petition petri petroleum petted petticoat pettiness petty petunia phantom phobia phoenix phonebook phoney phonics phoniness phony phosphate photo phrase phrasing placard placate placidly plank planner plant plasma plaster plastic plated platform plating platinum platonic platter platypus plausible plausibly playable playback player playful playgroup playhouse playing playlist playmaker playmate playoff playpen playroom playset plaything playtime plaza pleading pleat pledge plentiful plenty plethora plexiglas pliable plod plop plot plow ploy pluck plug plunder plunging plural plus plutonium plywood poach pod poem poet pogo pointed pointer pointing pointless pointy poise poison poker poking polar police policy polio polish politely polka polo polyester polygon polygraph polymer poncho pond pony popcorn pope poplar popper poppy popsicle populace popular populate porcupine pork porous porridge portable portal portfolio porthole portion portly portside poser posh posing possible possibly possum postage postal postbox postcard posted poster posting postnasal posture postwar pouch pounce pouncing pound pouring pout powdered powdering powdery power powwow pox praising prance prancing pranker prankish prankster prayer praying preacher preaching preachy preamble precinct precise precision precook precut predator predefine predict preface prefix preflight preformed pregame pregnancy pregnant preheated prelaunch prelaw prelude premiere premises premium prenatal preoccupy preorder prepaid prepay preplan preppy preschool prescribe preseason preset preshow president presoak press presume presuming preteen pretended pretender pretense pretext pretty pretzel prevail prevalent prevent preview previous prewar prewashed prideful pried primal primarily primary primate primer primp princess print prior prism prison prissy pristine privacy private privatize prize proactive probable probably probation probe probing probiotic problem procedure process proclaim procreate procurer prodigal prodigy produce product profane profanity professed professor profile profound profusely progeny prognosis program progress projector prologue prolonged promenade prominent promoter promotion prompter promptly prone prong pronounce pronto proofing proofread proofs propeller properly property proponent proposal propose props prorate protector protegee proton prototype protozoan protract protrude proud provable proved proven provided provider providing province proving provoke provoking provolone prowess prowler prowling proximity proxy prozac prude prudishly prune pruning pry psychic public publisher pucker pueblo pug pull pulmonary pulp pulsate pulse pulverize puma pumice pummel punch punctual punctuate punctured pungent punisher punk pupil puppet puppy purchase pureblood purebred purely pureness purgatory purge purging purifier purify purist puritan purity purple purplish purposely purr purse pursuable pursuant pursuit purveyor pushcart pushchair pusher pushiness pushing pushover pushpin pushup pushy putdown putt puzzle puzzling pyramid pyromania python quack quadrant quail quaintly quake quaking qualified qualifier qualify quality qualm quantum quarrel quarry quartered quarterly quarters quartet quench query quicken quickly quickness quicksand quickstep quiet quill quilt quintet quintuple quirk quit quiver quizzical quotable quotation quote rabid race racing racism rack racoon radar radial radiance radiantly radiated radiation radiator radio radish raffle raft rage ragged raging ragweed raider railcar railing railroad railway raisin rake raking rally ramble rambling ramp ramrod ranch rancidity random ranged ranger ranging ranked ranking ransack ranting rants rare rarity rascal rash rasping ravage raven ravine raving ravioli ravishing reabsorb reach reacquire reaction reactive reactor reaffirm ream reanalyze reappear reapply reappoint reapprove rearrange rearview reason reassign reassure reattach reawake rebalance rebate rebel rebirth reboot reborn rebound rebuff rebuild rebuilt reburial rebuttal recall recant recapture recast recede recent recess recharger recipient recital recite reckless reclaim recliner reclining recluse reclusive recognize recoil recollect recolor reconcile reconfirm reconvene recopy record recount recoup recovery recreate rectal rectangle rectified rectify recycled recycler recycling reemerge reenact reenter reentry reexamine referable referee reference refill refinance refined refinery refining refinish reflected reflector reflex reflux refocus refold reforest reformat reformed reformer reformist refract refrain refreeze refresh refried refueling refund refurbish refurnish refusal refuse refusing refutable refute regain regalia regally reggae regime region register registrar registry regress regretful regroup regular regulate regulator rehab reheat rehire rehydrate reimburse reissue reiterate rejoice rejoicing rejoin rekindle relapse relapsing relatable related relation relative relax relay relearn release relenting reliable reliably reliance reliant relic relieve relieving relight relish relive reload relocate relock reluctant rely remake remark remarry rematch remedial remedy remember reminder remindful remission remix remnant remodeler remold remorse remote removable removal removed remover removing rename renderer rendering rendition renegade renewable renewably renewal renewed renounce renovate renovator rentable rental rented renter reoccupy reoccur reopen reorder repackage repacking repaint repair repave repaying repayment repeal repeated repeater repent rephrase replace replay replica reply reporter repose repossess repost repressed reprimand reprint reprise reproach reprocess reproduce reprogram reps reptile reptilian repugnant repulsion repulsive repurpose reputable reputably request require requisite reroute rerun resale resample rescuer reseal research reselect reseller resemble resend resent reset reshape reshoot reshuffle residence residency resident residual residue resigned resilient resistant resisting resize resolute resolved resonant resonate resort resource respect resubmit result resume resupply resurface resurrect retail retainer retaining retake retaliate retention rethink retinal retired retiree retiring retold retool retorted retouch retrace retract retrain retread retreat retrial retrieval retriever retry return retying retype reunion reunite reusable reuse reveal reveler revenge revenue reverb revered reverence reverend reversal reverse reversing reversion revert revisable revise revision revisit revivable revival reviver reviving revocable revoke revolt revolver revolving reward rewash rewind rewire reword rework rewrap rewrite rhyme ribbon ribcage rice riches richly richness rickety ricotta riddance ridden ride riding rifling rift rigging rigid rigor rimless rimmed rind rink rinse rinsing riot ripcord ripeness ripening ripping ripple rippling riptide rise rising risk risotto ritalin ritzy rival riverbank riverbed riverboat riverside riveter riveting roamer roaming roast robbing robe robin robotics robust rockband rocker rocket rockfish rockiness rocking rocklike rockslide rockstar rocky rogue roman romp rope roping roster rosy rotten rotting rotunda roulette rounding roundish roundness roundup roundworm routine routing rover roving royal rubbed rubber rubbing rubble rubdown ruby ruckus rudder rug ruined rule rumble rumbling rummage rumor runaround rundown runner running runny runt runway rupture rural ruse rush rust rut sabbath sabotage sacrament sacred sacrifice sadden saddlebag saddled saddling sadly sadness safari safeguard safehouse safely safeness saffron saga sage sagging saggy said saint sake salad salami salaried salary saline salon saloon salsa salt salutary salute salvage salvaging salvation same sample sampling sanction sanctity sanctuary sandal sandbag sandbank sandbar sandblast sandbox sanded sandfish sanding sandlot sandpaper sandpit sandstone sandstorm sandworm sandy sanitary sanitizer sank santa sapling sappiness sappy sarcasm sarcastic sardine sash sasquatch sassy satchel satiable satin satirical satisfied satisfy saturate saturday sauciness saucy sauna savage savanna saved savings savior savor saxophone say scabbed scabby scalded scalding scale scaling scallion scallop scalping scam scandal scanner scanning scant scapegoat scarce scarcity scarecrow scared scarf scarily scariness scarring scary scavenger scenic schedule schematic scheme scheming schilling schnapps scholar science scientist scion scoff scolding scone scoop scooter scope scorch scorebook scorecard scored scoreless scorer scoring scorn scorpion scotch scoundrel scoured scouring scouting scouts scowling scrabble scraggly scrambled scrambler scrap scratch scrawny screen scribble scribe scribing scrimmage script scroll scrooge scrounger scrubbed scrubber scruffy scrunch scrutiny scuba scuff sculptor sculpture scurvy scuttle secluded secluding seclusion second secrecy secret sectional sector secular securely security sedan sedate sedation sedative sediment seduce seducing segment seismic seizing seldom selected selection selective selector self seltzer semantic semester semicolon semifinal seminar semisoft semisweet senate senator send senior senorita sensation sensitive sensitize sensually sensuous sepia september septic septum sequel sequence sequester series sermon serotonin serpent serrated serve service serving sesame sessions setback setting settle settling setup sevenfold seventeen seventh seventy severity shabby shack shaded shadily shadiness shading shadow shady shaft shakable shakily shakiness shaking shaky shale shallot shallow shame shampoo shamrock shank shanty shape shaping share sharpener sharper sharpie sharply sharpness shawl sheath shed sheep sheet shelf shell shelter shelve shelving sherry shield shifter shifting shiftless shifty shimmer shimmy shindig shine shingle shininess shining shiny ship shirt shivering shock shone shoplift shopper shopping shoptalk shore shortage shortcake shortcut shorten shorter shorthand shortlist shortly shortness shorts shortwave shorty shout shove showbiz showcase showdown shower showgirl showing showman shown showoff showpiece showplace showroom showy shrank shrapnel shredder shredding shrewdly shriek shrill shrimp shrine shrink shrivel shrouded shrubbery shrubs shrug shrunk shucking shudder shuffle shuffling shun shush shut shy siamese siberian sibling siding sierra siesta sift sighing silenced silencer silent silica silicon silk silliness silly silo silt silver similarly simile simmering simple simplify simply sincere sincerity singer singing single singular sinister sinless sinner sinuous sip siren sister sitcom sitter sitting situated situation sixfold sixteen sixth sixties sixtieth sixtyfold sizable sizably size sizing sizzle sizzling skater skating skedaddle skeletal skeleton skeptic sketch skewed skewer skid skied skier skies skiing skilled skillet skillful skimmed skimmer skimming skimpily skincare skinhead skinless skinning skinny skintight skipper skipping skirmish skirt skittle skydiver skylight skyline skype skyrocket skyward slab slacked slacker slacking slackness slacks slain slam slander slang slapping slapstick slashed slashing slate slather slaw sled sleek sleep sleet sleeve slept sliceable sliced slicer slicing slick slider slideshow sliding slighted slighting slightly slimness slimy slinging slingshot slinky slip slit sliver slobbery slogan sloped sloping sloppily sloppy slot slouching slouchy sludge slug slum slurp slush sly small smartly smartness smasher smashing smashup smell smelting smile smilingly smirk smite smith smitten smock smog smoked smokeless smokiness smoking smoky smolder smooth smother smudge smudgy smuggler smuggling smugly smugness snack snagged snaking snap snare snarl snazzy sneak sneer sneeze sneezing snide sniff snippet snipping snitch snooper snooze snore snoring snorkel snort snout snowbird snowboard snowbound snowcap snowdrift snowdrop snowfall snowfield snowflake snowiness snowless snowman snowplow snowshoe snowstorm snowsuit snowy snub snuff snuggle snugly snugness speak spearfish spearhead spearman spearmint species specimen specked speckled specks spectacle spectator spectrum speculate speech speed spellbind speller spelling spendable spender spending spent spew sphere spherical sphinx spider spied spiffy spill spilt spinach spinal spindle spinner spinning spinout spinster spiny spiral spirited spiritism spirits spiritual splashed splashing splashy splatter spleen splendid splendor splice splicing splinter splotchy splurge spoilage spoiled spoiler spoiling spoils spoken spokesman sponge spongy sponsor spoof spookily spooky spool spoon spore sporting sports sporty spotless spotlight spotted spotter spotting spotty spousal spouse spout sprain sprang sprawl spray spree sprig spring sprinkled sprinkler sprint sprite sprout spruce sprung spry spud spur sputter spyglass squabble squad squall squander squash squatted squatter squatting squeak squealer squealing squeamish squeegee squeeze squeezing squid squiggle squiggly squint squire squirt squishier squishy stability stabilize stable stack stadium staff stage staging stagnant stagnate stainable stained staining stainless stalemate staleness stalling stallion stamina stammer stamp stand stank staple stapling starboard starch stardom stardust starfish stargazer staring stark starless starlet starlight starlit starring starry starship starter starting startle startling startup starved starving stash state static statistic statue stature status statute statutory staunch stays steadfast steadier steadily steadying steam steed steep steerable steering steersman stegosaur stellar stem stench stencil step stereo sterile sterility sterilize sterling sternness sternum stew stick stiffen stiffly stiffness stifle stifling stillness stilt stimulant stimulate stimuli stimulus stinger stingily stinging stingray stingy stinking stinky stipend stipulate stir stitch stock stoic stoke stole stomp stonewall stoneware stonework stoning stony stood stooge stool stoop stoplight stoppable stoppage stopped stopper stopping stopwatch storable storage storeroom storewide storm stout stove stowaway stowing straddle straggler strained strainer straining strangely stranger strangle strategic strategy stratus straw stray streak stream street strength strenuous strep stress stretch strewn stricken strict stride strife strike striking strive striving strobe strode stroller strongbox strongly strongman struck structure strudel struggle strum strung strut stubbed stubble stubbly stubborn stucco stuck student studied studio study stuffed stuffing stuffy stumble stumbling stump stung stunned stunner stunning stunt stupor sturdily sturdy styling stylishly stylist stylized stylus suave subarctic subatomic subdivide subdued subduing subfloor subgroup subheader subject sublease sublet sublevel sublime submarine submerge submersed submitter subpanel subpar subplot subprime subscribe subscript subsector subside subsiding subsidize subsidy subsoil subsonic substance subsystem subtext subtitle subtly subtotal subtract subtype suburb subway subwoofer subzero succulent such suction sudden sudoku suds sufferer suffering suffice suffix suffocate suffrage sugar suggest suing suitable suitably suitcase suitor sulfate sulfide sulfite sulfur sulk sullen sulphate sulphuric sultry superbowl superglue superhero superior superjet superman supermom supernova supervise supper supplier supply support supremacy supreme surcharge surely sureness surface surfacing surfboard surfer surgery surgical surging surname surpass surplus surprise surreal surrender surrogate surround survey survival survive surviving survivor sushi suspect suspend suspense sustained sustainer swab swaddling swagger swampland swan swapping swarm sway swear sweat sweep swell swept swerve swifter swiftly swiftness swimmable swimmer swimming swimsuit swimwear swinger swinging swipe swirl switch swivel swizzle swooned swoop swoosh swore sworn swung sycamore sympathy symphonic symphony symptom synapse syndrome synergy synopses synopsis synthesis synthetic syrup system tabasco tabby tableful tables tablet tableware tabloid tackiness tacking tackle tackling tacky taco tactful tactical tactics tactile tactless tadpole taekwondo tag tainted take taking talcum talisman tall talon tamale tameness tamer tamper tank tanned tannery tanning tantrum tapeless tapered tapering tapestry tapioca tapping taps tarantula target tarmac tarnish tarot tartar tartly tartness task tassel taste tastiness tasting tasty tattered tattle tattling tattoo taunt tavern thank that thaw theater theatrics thee theft theme theology theorize thermal thermos thesaurus these thesis thespian thicken thicket thickness thieving thievish thigh thimble thing think thinly thinner thinness thinning thirstily thirsting thirsty thirteen thirty thong thorn those thousand thrash thread threaten threefold thrift thrill thrive thriving throat throbbing throng throttle throwaway throwback thrower throwing thud thumb thumping thursday thus thwarting thyself tiara tibia tidal tidbit tidiness tidings tidy tiger tighten tightly tightness tightrope tightwad tigress tile tiling till tilt timid timing timothy tinderbox tinfoil tingle tingling tingly tinker tinkling tinsel tinsmith tint tinwork tiny tipoff tipped tipper tipping tiptoeing tiptop tiring tissue trace tracing track traction tractor trade trading tradition traffic tragedy trailing trailside train traitor trance tranquil transfer transform translate transpire transport transpose trapdoor trapeze trapezoid trapped trapper trapping traps trash travel traverse travesty tray treachery treading treadmill treason treat treble tree trekker tremble trembling tremor trench trend trespass triage trial triangle tribesman tribunal tribune tributary tribute triceps trickery trickily tricking trickle trickster tricky tricolor tricycle trident tried trifle trifocals trillion trilogy trimester trimmer trimming trimness trinity trio tripod tripping triumph trivial trodden trolling trombone trophy tropical tropics trouble troubling trough trousers trout trowel truce truck truffle trump trunks trustable trustee trustful trusting trustless truth try tubby tubeless tubular tucking tuesday tug tuition tulip tumble tumbling tummy turban turbine turbofan turbojet turbulent turf turkey turmoil turret turtle tusk tutor tutu tux tweak tweed tweet tweezers twelve twentieth twenty twerp twice twiddle twiddling twig twilight twine twins twirl twistable twisted twister twisting twisty twitch twitter tycoon tying tyke udder ultimate ultimatum ultra umbilical umbrella umpire unabashed unable unadorned unadvised unafraid unaired unaligned unaltered unarmored unashamed unaudited unawake unaware unbaked unbalance unbeaten unbend unbent unbiased unbitten unblended unblessed unblock unbolted unbounded unboxed unbraided unbridle unbroken unbuckled unbundle unburned unbutton uncanny uncapped uncaring uncertain unchain unchanged uncharted uncheck uncivil unclad unclaimed unclamped unclasp uncle unclip uncloak unclog unclothed uncoated uncoiled uncolored uncombed uncommon uncooked uncork uncorrupt uncounted uncouple uncouth uncover uncross uncrown uncrushed uncured uncurious uncurled uncut undamaged undated undaunted undead undecided undefined underage underarm undercoat undercook undercut underdog underdone underfed underfeed underfoot undergo undergrad underhand underline underling undermine undermost underpaid underpass underpay underrate undertake undertone undertook undertow underuse underwear underwent underwire undesired undiluted undivided undocked undoing undone undrafted undress undrilled undusted undying unearned unearth unease uneasily uneasy uneatable uneaten unedited unelected unending unengaged unenvied unequal unethical uneven unexpired unexposed unfailing unfair unfasten unfazed unfeeling unfiled unfilled unfitted unfitting unfixable unfixed unflawed unfocused unfold unfounded unframed unfreeze unfrosted unfrozen unfunded unglazed ungloved unglue ungodly ungraded ungreased unguarded unguided unhappily unhappy unharmed unhealthy unheard unhearing unheated unhelpful unhidden unhinge unhitched unholy unhook unicorn unicycle unified unifier uniformed uniformly unify unimpeded uninjured uninstall uninsured uninvited union uniquely unisexual unison unissued unit universal universe unjustly unkempt unkind unknotted unknowing unknown unlaced unlatch unlawful unleaded unlearned unleash unless unleveled unlighted unlikable unlimited unlined unlinked unlisted unlit unlivable unloaded unloader unlocked unlocking unlovable unloved unlovely unloving unluckily unlucky unmade unmanaged unmanned unmapped unmarked unmasked unmasking unmatched unmindful unmixable unmixed unmolded unmoral unmovable unmoved unmoving unnamable unnamed unnatural unneeded unnerve unnerving unnoticed unopened unopposed unpack unpadded unpaid unpainted unpaired unpaved unpeeled unpicked unpiloted unpinned unplanned unplanted unpleased unpledged unplowed unplug unpopular unproven unquote unranked unrated unraveled unreached unread unreal unreeling unrefined unrelated unrented unrest unretired unrevised unrigged unripe unrivaled unroasted unrobed unroll unruffled unruly unrushed unsaddle unsafe unsaid unsalted unsaved unsavory unscathed unscented unscrew unsealed unseated unsecured unseeing unseemly unseen unselect unselfish unsent unsettled unshackle unshaken unshaved unshaven unsheathe unshipped unsightly unsigned unskilled unsliced unsmooth unsnap unsocial unsoiled unsold unsolved unsorted unspoiled unspoken unstable unstaffed unstamped unsteady unsterile unstirred unstitch unstopped unstuck unstuffed unstylish unsubtle unsubtly unsuited unsure unsworn untagged untainted untaken untamed untangled untapped untaxed unthawed unthread untidy untie until untimed untimely untitled untoasted untold untouched untracked untrained untreated untried untrimmed untrue untruth unturned untwist untying unusable unused unusual unvalued unvaried unvarying unveiled unveiling unvented unviable unvisited unvocal unwanted unwarlike unwary unwashed unwatched unweave unwed unwelcome unwell unwieldy unwilling unwind unwired unwitting unwomanly unworldly unworn unworried unworthy unwound unwoven unwrapped unwritten unzip upbeat upchuck upcoming upcountry update upfront upgrade upheaval upheld uphill uphold uplifted uplifting upload upon upper upright uprising upriver uproar uproot upscale upside upstage upstairs upstart upstate upstream upstroke upswing uptake uptight uptown upturned upward upwind uranium urban urchin urethane urgency urgent urging urologist urology usable usage useable used uselessly user usher usual utensil utility utilize utmost utopia utter vacancy vacant vacate vacation vagabond vagrancy vagrantly vaguely vagueness valiant valid valium valley valuables value vanilla vanish vanity vanquish vantage vaporizer variable variably varied variety various varmint varnish varsity varying vascular vaseline vastly vastness veal vegan veggie vehicular velcro velocity velvet vendetta vending vendor veneering vengeful venomous ventricle venture venue venus verbalize verbally verbose verdict verify verse version versus vertebrae vertical vertigo very vessel vest veteran veto vexingly viability viable vibes vice vicinity victory video viewable viewer viewing viewless viewpoint vigorous village villain vindicate vineyard vintage violate violation violator violet violin viper viral virtual virtuous virus visa viscosity viscous viselike visible visibly vision visiting visitor visor vista vitality vitalize vitally vitamins vivacious vividly vividness vixen vocalist vocalize vocally vocation voice voicing void volatile volley voltage volumes voter voting voucher vowed vowel voyage wackiness wad wafer waffle waged wager wages waggle wagon wake waking walk walmart walnut walrus waltz wand wannabe wanted wanting wasabi washable washbasin washboard washbowl washcloth washday washed washer washhouse washing washout washroom washstand washtub wasp wasting watch water waviness waving wavy whacking whacky wham wharf wheat whenever whiff whimsical whinny whiny whisking whoever whole whomever whoopee whooping whoops why wick widely widen widget widow width wieldable wielder wife wifi wikipedia wildcard wildcat wilder wildfire wildfowl wildland wildlife wildly wildness willed willfully willing willow willpower wilt wimp wince wincing wind wing winking winner winnings winter wipe wired wireless wiring wiry wisdom wise wish wisplike wispy wistful wizard wobble wobbling wobbly wok wolf wolverine womanhood womankind womanless womanlike womanly womb woof wooing wool woozy word work worried worrier worrisome worry worsening worshiper worst wound woven wow wrangle wrath wreath wreckage wrecker wrecking wrench wriggle wriggly wrinkle wrinkly wrist writing written wrongdoer wronged wrongful wrongly wrongness wrought xbox xerox yahoo yam yanking yapping yard yarn yeah yearbook yearling yearly yearning yeast yelling yelp yen yesterday yiddish yield yin yippee yodel yoga yogurt yonder yoyo yummy zap zealous zebra zen zeppelin zero zestfully zesty zigzagged zipfile zipping zippy zips zit zodiac zombie zone zoning zookeeper zoologist zoology zoom';
+  const CODE_WORDS = CODE_WORDLIST.split(' ');
+  const CODE_BASE = BigInt(CODE_WORDS.length);
+  const CODE_INDEX = new Map(CODE_WORDS.map((w, i) => [w, i]));
+  const EPOCH24 = 19723;   // 1 Jan 2024, days since 1970. Dates in a version-1 code run 2024 to 2035.
+
+  // Layout, least significant bit first (a new layout gets a new version number and never replaces an old decoder):
+  //   version 2 bits (1) | eyes injected 2 bits (RE=1, LE=2)
+  //   for each injected eye: last injection date, interval to the injection before it (or none), drug
+  //   review: yes/no, date, RE and LE OCT result | 8-bit check
+  const crc8 = (v, n) => {
+    let crc = (0xA5 ^ n) & 255;
+    for (let i = 0; i < Math.ceil(n / 8); i++){
+      crc ^= Number((v >> BigInt(8 * i)) & 255n);
+      for (let k = 0; k < 8; k++) crc = (crc & 128) ? ((crc << 1) ^ 0x07) & 255 : (crc << 1) & 255;
+    }
+    return crc;
+  };
+
+  // snap: {RE: {day, drug 0-6, prev days or 0} | null, LE: same, review: {day, RE 0-3, LE 0-3} | null}
+  function encodeSnapshot(s){
+    let v = 0n, n = 0;
+    const put = (val, bits) => { if (!(val >= 0 && val < 2 ** bits)) throw new Error('range'); v |= BigInt(val) << BigInt(n); n += bits; };
+    const abs = day => put(day - EPOCH24, 12);
+    const interval = prev => {
+      if (!prev || prev > 511){ put(0, 1); return; }
+      put(1, 1);
+      if (prev % 7 === 0 && prev / 7 <= 63) put(prev / 7, 6); else { put(0, 6); put(prev, 9); }
+    };
+    put(1, 2);
+    const re = s.RE, le = s.LE;
+    put((re ? 1 : 0) | (le ? 2 : 0), 2);
+    let ref = null;
+    if (re || le){
+      const A = re || le;
+      abs(A.day); interval(A.prev); put(A.drug, 3); ref = A.day;
+      if (re && le){
+        const off = le.day - re.day;
+        if (off >= -64 && off <= 63){ put(1, 1); put(off + 64, 7); } else { put(0, 1); abs(le.day); }
+        interval(le.prev);
+        if (le.drug === re.drug) put(1, 1); else { put(0, 1); put(le.drug, 3); }
+        ref = Math.max(re.day, le.day);
+      }
+    }
+    if (s.review){
+      const r = s.review;
+      put(1, 1);
+      if (ref != null){
+        const off = r.day - ref;
+        if (off >= -16 && off <= 239){ put(1, 1); put(off + 16, 8); } else { put(0, 1); abs(r.day); }
+      } else abs(r.day);
+      put(r.RE, 2); put(r.LE, 2);
+    } else put(0, 1);
+    put(crc8(v, n), 8);
+    return v;
+  }
+
+  function decodeSnapshot(v){
+    let p = 0;
+    const get = bits => { const r = Number((v >> BigInt(p)) & ((1n << BigInt(bits)) - 1n)); p += bits; return r; };
+    const bad = {error: "The words don't make a valid code. Check them against the notes."};
+    const ver = get(2);
+    if (ver === 0) return bad;
+    if (ver !== 1) return {error: 'This code was made by a newer version of the app.'};
+    const abs = () => EPOCH24 + get(12);
+    const interval = () => { if (!get(1)) return 0; const w = get(6); return w ? w * 7 : get(9); };
+    const mask = get(2), s = {RE: null, LE: null, review: null};
+    let ref = null;
+    if (mask){
+      const first = (mask & 1) ? 'RE' : 'LE';
+      const day = abs(), prev = interval(), drug = get(3);
+      if (drug > 6) return bad;
+      s[first] = {day, prev, drug}; ref = day;
+      if (mask === 3){
+        const dayB = get(1) ? day + get(7) - 64 : abs();
+        const prevB = interval();
+        const drugB = get(1) ? drug : get(3);
+        if (drugB > 6) return bad;
+        s.LE = {day: dayB, prev: prevB, drug: drugB};
+        ref = Math.max(day, dayB);
+      }
+    }
+    if (get(1)){
+      const day = ref != null ? (get(1) ? ref + get(8) - 16 : abs()) : abs();
+      s.review = {day, RE: get(2), LE: get(2)};
+    }
+    const n = p, crc = get(8);
+    if (crc !== crc8(v & ((1n << BigInt(n)) - 1n), n)) return {error: "The words don't check out. One may be wrong or out of order: compare with the notes."};
+    if ((v >> BigInt(p)) !== 0n) return bad;
+    return {snap: s};
+  }
+
+  function buildCode(snap){
+    if (!snap.RE && !snap.LE && !snap.review) return '';
+    let v;
+    try { v = encodeSnapshot(snap); } catch (e) { return null; }
+    const out = [];
+    for (; v > 0n; v /= CODE_BASE) out.push(CODE_WORDS[Number(v % CODE_BASE)]);
+    return out.reverse().join(' ');
+  }
+
+  // Older codes: "AMBER 2389 1328 ..." (full history as digits). Still readable, no longer written.
+  const LEGACY_WORDS = ['AMBER', 'BIRCH', 'CEDAR', 'DELTA', 'EMBER', 'FLINT', 'GROVE', 'HAZEL'];
+  const LEGACY_EPOCH = 18262;
+  const DAMM = [[0,3,1,7,5,9,8,6,4,2],[7,0,9,2,1,5,4,8,6,3],[4,2,0,6,8,7,1,3,5,9],[1,7,5,0,9,8,3,4,2,6],[6,1,2,3,0,4,5,9,7,8],
+                [3,6,7,4,2,0,9,5,8,1],[5,8,6,9,7,2,0,1,3,4],[8,9,4,5,3,6,2,0,1,7],[9,4,3,8,6,1,7,2,0,5],[2,5,8,1,4,3,6,7,9,0]];
+  const damm = str => { let i = 0; for (const ch of str) i = DAMM[i][+ch]; return i; };
+  function decodeLegacy(d){
+    let p = 0;
+    const take = n => { if (p + n > d.length) throw new Error('short'); const s = d.slice(p, p + n); p += n; return Number(s); };
+    const events = [];
+    let day = LEGACY_EPOCH + take(4), first = true;
+    while (first || p < d.length){
+      if (!first){
+        const v = take(2);
+        if (v === 0) throw new Error('bad');
+        day += v < 90 ? v : v < 99 ? 90 + (v - 90) * 100 + take(2) : 90 + take(4);
+      }
+      first = false;
+      const f = take(1);
+      if (f < 1 || f > 7) throw new Error('bad');
+      const e = {day, flags: f, reD: 0, leD: 0, reS: 0, leS: 0};
+      if (f & 1){ e.reD = take(1); if (e.reD > 6) throw new Error('bad'); }
+      if (f & 2){ e.leD = take(1); if (e.leD > 6) throw new Error('bad'); }
+      if (f & 4){ e.reS = take(1); e.leS = take(1); if (e.reS > 3 || e.leS > 3) throw new Error('bad'); }
+      events.push(e);
+    }
+    return events;
+  }
+
+  // text -> {snap} | {legacyEvents} | {error}
+  function parseCode(text){
+    const toks = String(text || '').trim().split(/[\s,;.\-–_\/]+/).filter(Boolean);
+    if (!toks.length) return {error: 'Enter the code words from the notes.'};
+    if (LEGACY_WORDS.includes(toks[0].toUpperCase()) && toks.length > 1 && toks.slice(1).every(t => /^[0-9OoIil|]+$/.test(t)) && toks.slice(1).some(t => /[0-9]/.test(t))){
+      const digits = toks.slice(1).join('').replace(/[Oo]/g, '0').replace(/[Iil|]/g, '1');
+      if (toks[0].toUpperCase() !== 'AMBER') return {error: 'This code was made by a newer version of the app.'};
+      if (digits.length < 6 || damm(digits) !== 0) return {error: "The digits don't check out. One is probably copied wrong: compare with the notes."};
+      try { return {legacyEvents: decodeLegacy(digits.slice(0, -1))}; }
+      catch (e) { return {error: "The number doesn't read as a valid code. Check it against the notes."}; }
+    }
+      const ix = [];
+    for (const t0 of toks){
+      const t = t0.toLowerCase();
+      let i = CODE_INDEX.get(t);
+      if (i === undefined && t.length >= 3){
+        const hits = [];
+        for (let k = 0; k < CODE_WORDS.length && hits.length < 2; k++) if (CODE_WORDS[k].startsWith(t)) hits.push(k);
+        if (hits.length === 1) i = hits[0];
+        else if (hits.length > 1) return {error: `"${t0}" could be more than one word. Type a few more letters.`};
+      }
+      if (i === undefined) return {error: `"${t0}" isn't in the word list. Check that word.`};
+      ix.push(i);
+    }
+    if (ix[0] === 0) return {error: "The words don't make a valid code. Check them against the notes."};
+    let v = 0n;
+    for (const i of ix) v = v * CODE_BASE + BigInt(i);
+    if ((v & 1n) === 0n){                                       // version 3, else version 2
+      const r3 = decodeV2(v, todayNum(), true);
+      if (r3.snap2) return r3;
+      const r2 = decodeV2(v, todayNum(), false);
+      return r2.snap2 ? r2 : r3;
+    }
+    if ((v & 3n) === 3n) return {error: 'This code was made by a newer version of the app.'};
+    return decodeSnapshot(v);                                  // version 1
+  }
+
+  // ---- Version 2 word code: last 2 injections per eye, latest review, and the injection plan ----
+  // Built around how the clinic works, so the usual patterns take very few bits:
+  //   - dates are stored relative to the latest review, and the review is usually in the fortnight
+  //     before the next injection, so "days from review to next injection" is small
+  //   - intervals are usually whole weeks, both eyes are often injected the same day with the same drug
+  //   - the plan is usually "carry on", or a treat-and-extend step of 1 to 2 weeks
+  // The first bit is 0 for version 2 (version-1 codes always start 1, 0), and a pattern starting 1, 1
+  // is kept free for future versions, so every old code keeps decoding the same way.
+  const ROLL = 2048;   // the anchor date is kept modulo 2048 days: a code reads correctly for 5 years
+  const bookedOf = prev => prev ? Math.min(52, Math.max(4, Math.round(prev / 7))) : 4;
+  const MOVE_SMALL = [1, 2, 3, 4, 5, 6, 14, 21];
+  const PLAN_STEPS = [-1, 1, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7, -8, 8, -10, 10];   // weeks, besides +-2
+  // Version 3 is version 2 without drugs or OCT results; it shares version 2's first bit and is told apart
+  // by a different checksum seed, so it costs no extra bits. Readers try version 3 first, then version 2.
+  const crc8v2 = (v, n, v3) => {
+    let crc = ((v3 ? 0x3A : 0x5C) ^ n) & 255;
+    for (let i = 0; i < Math.ceil(n / 8); i++){
+      crc ^= Number((v >> BigInt(8 * i)) & 255n);
+      for (let k = 0; k < 8; k++) crc = (crc & 128) ? ((crc << 1) ^ 0x07) & 255 : (crc << 1) & 255;
+    }
+    return crc;
+  };
+
+  // snap: {RE, LE: {last, prev (days, 0 = none), drug 0-6, planned (weeks 4-52), shift: [3 x days]} | null,
+  //        review: {day, RE 0-3, LE 0-3} | null}
+  function encodeV2(s, v3 = false){
+    let v = 0n, n = 0;
+    const put = (val, bits) => { if (!(Number.isInteger(val) && val >= 0 && val < 2 ** bits)) throw new Error('range'); v |= BigInt(val) << BigInt(n); n += bits; };
+    const bitsStr = str => { for (const ch of str) put(+ch, 1); };
+    const roll = day => ((day % ROLL) + ROLL) % ROLL;
+    const eyes = ['RE', 'LE'].filter(e => s[e]);
+    put(0, 1);                                                    // version 2
+    const mask = (s.RE ? 1 : 0) | (s.LE ? 2 : 0) | (s.review ? 4 : 0);
+    if (!mask) throw new Error('empty');
+    if (mask === 7) bitsStr('1'); else { bitsStr('0'); put(mask, 3); }
+    const anchor = s.review ? s.review.day : s[eyes[0]].last;
+    put(roll(anchor), 11);
+    const prevCode = p => {
+      if (!p) { bitsStr('110'); return; }
+      if (p > 4095) throw new Error('range');
+      if (p % 7 === 0 && p / 7 >= 4 && p / 7 <= 19){ bitsStr('0'); put(p / 7 - 4, 4); return; }
+      const w = Math.floor(p / 7), d = p % 7;
+      if (w >= 4 && w <= 19){ bitsStr('10'); put(w - 4, 4); put(d, 3); return; }
+      bitsStr('1110'); put(Math.min(p, 4095), 12);
+    };
+    const planCode = (planned, booked) => {
+      const dlt = planned - booked;
+      if (dlt === 0) { bitsStr('0'); return; }
+      if (dlt === 2) { bitsStr('10'); return; }
+      if (dlt === -2) { bitsStr('110'); return; }
+      const j = PLAN_STEPS.indexOf(dlt);
+      if (j >= 0) { bitsStr('1110'); put(j, 4); return; }
+      bitsStr('1111'); put(planned, 6);
+    };
+    const moveCode = sh => {
+      if (!sh.some(x => x)) { bitsStr('0'); return; }
+      if (Math.abs(sh[0]) === 7 && !sh[1] && !sh[2]) { bitsStr('10'); put(sh[0] < 0 ? 1 : 0, 1); return; }
+      bitsStr('11');
+      for (const x of sh){
+        if (!x) { bitsStr('0'); continue; }
+        const m = Math.abs(x), sg = x < 0 ? 1 : 0;
+        if (m === 7){ bitsStr('10'); put(sg, 1); continue; }
+        const i = MOVE_SMALL.indexOf(m);
+        if (i >= 0){ bitsStr('110'); put(sg, 1); put(i, 3); continue; }
+        bitsStr('111'); put(x + 128, 8);                           // -128..127 days
+      }
+    };
+    const posCode = (e, booked, isB, A) => {
+      if (isB && e.last === A.last){ bitsStr('0'); return; }
+      const next = e.last + booked * 7 + (e.shift[0] || 0);
+      if (s.review){
+        const k = next - s.review.day, d = e.last - s.review.day;
+        if (k >= 0 && k <= 15){ bitsStr(isB ? '10' : '0'); put(k, 4); return; }
+        if (d >= 0 && d <= 31){ bitsStr(isB ? '110' : '10'); put(d, 5); return; }
+        if (k >= 16 && k <= 47){ bitsStr(isB ? '1110' : '110'); put(k - 16, 5); return; }
+      } else if (isB){
+        const o = e.last - A.last;
+        if (o >= -32 && o <= 31){ bitsStr('10'); put(o + 32, 6); return; }
+      }
+      const off = e.last - anchor;
+      if (off < -ROLL || off >= ROLL) throw new Error('range');
+      bitsStr(s.review ? (isB ? '1111' : '111') : '11'); put(((e.last % (2 * ROLL)) + 2 * ROLL) % (2 * ROLL), 12);
+    };
+    let A = null;
+    eyes.forEach((eye, idx) => {
+      const e = s[eye], isB = idx === 1, booked = bookedOf(e.prev);
+      if (isB){ if (e.prev === A.prev) bitsStr('0'); else { bitsStr('1'); prevCode(e.prev); } }
+      else prevCode(e.prev);
+      planCode(e.planned, booked);
+      moveCode(e.shift);
+      if (!v3){
+        if (isB){ if (e.drug === A.drug) bitsStr('0'); else { bitsStr('1'); put(e.drug, 3); } }
+        else put(e.drug, 3);
+      }
+      if (isB || s.review) posCode(e, booked, isB, A);   // with no review, eye A's last injection is the anchor
+      if (!isB) A = e;
+    });
+    if (s.review && !v3){ put(s.review.RE, 2); put(s.review.LE, 2); }
+    put(crc8v2(v, n, v3), 8);
+    return v;
+  }
+
+  function decodeV2(v, today, v3 = false){
+    let p = 0;
+    const bad = {error: "The words don't make a valid code. Check them against the notes."};
+    const get = bits => { const r = Number((v >> BigInt(p)) & ((1n << BigInt(bits)) - 1n)); p += bits; return r; };
+    const bit = () => get(1);
+    try {
+      if (bit() !== 0) return bad;
+      let mask = bit() ? 7 : get(3);
+      if (mask === 0) return bad;
+      const anchorRaw = get(11);
+      const base = today + 60;
+      const anchor = base - (((base - anchorRaw) % ROLL) + ROLL) % ROLL;
+      const W = 2 * ROLL, near = raw => anchor + ((((raw - anchor) % W) + W + W / 2) % W) - W / 2;
+      const prevDec = () => {
+        if (!bit()) return (get(4) + 4) * 7;
+        if (!bit()) { const w = get(4) + 4, d = get(3); if (d > 6 || d === 0) throw 0; return w * 7 + d; }
+        if (!bit()) return 0;
+        if (bit()) throw 0;
+        const x = get(12); if (x === 0) throw 0; return x;
+      };
+      const planDec = booked => {
+        if (!bit()) return booked;
+        if (!bit()) return booked + 2;
+        if (!bit()) return booked - 2;
+        if (!bit()) return booked + PLAN_STEPS[get(4)];
+        const x = get(6); if (x - booked === 0 || x - booked === 2 || x - booked === -2 || PLAN_STEPS.includes(x - booked)) throw 0; return x;
+      };
+      const moveDec = () => {
+        if (!bit()) return [0, 0, 0];
+        if (!bit()) return [get(1) ? -7 : 7, 0, 0];
+        const sh = [0, 1, 2].map(() => {
+          if (!bit()) return 0;
+          if (!bit()) return get(1) ? -7 : 7;
+          if (!bit()) { const sg = get(1); return (sg ? -1 : 1) * MOVE_SMALL[get(3)]; }
+          const x = get(8) - 128; if (x === 0 || Math.abs(x) === 7 || MOVE_SMALL.includes(Math.abs(x))) throw 0; return x;
+        });
+        if (!sh.some(x => x) || (Math.abs(sh[0]) === 7 && !sh[1] && !sh[2])) throw 0;
+        return sh;
+      };
+      const hasRev = !!(mask & 4);
+      const eyes = ['RE', 'LE'].filter((e, i) => mask & (1 << i));
+      const s = {RE: null, LE: null, review: hasRev ? {day: anchor, RE: 0, LE: 0} : null};
+      let A = null;
+      for (let idx = 0; idx < eyes.length; idx++){
+        const isB = idx === 1;
+        const prev = isB ? (bit() ? prevDec() : A.prev) : prevDec();
+        const booked = bookedOf(prev);
+        const planned = planDec(booked);
+        if (planned < 4 || planned > 52) throw 0;
+        const shift = moveDec();
+        const drug = v3 ? 0 : isB ? (bit() ? get(3) : A.drug) : get(3);
+        if (drug > 6) throw 0;
+        let last;
+        const fromK = k => (hasRev ? anchor : 0) + k - booked * 7 - shift[0];
+        if (!isB && !hasRev) last = anchor;
+        else if (isB && !bit()) last = A.last;
+        else if (!bit()) last = hasRev ? fromK(get(4)) : A.last + get(6) - 32;
+        else if (hasRev && !bit()) last = anchor + get(5);
+        else if (hasRev && !bit()) last = fromK(get(5) + 16);
+        else last = near(get(12));
+        const e = {last, prev, drug, planned, shift};
+        s[eyes[idx]] = e;
+        if (!isB) A = e;
+      }
+      if (hasRev && !v3){ s.review.RE = get(2); s.review.LE = get(2); }
+      const n = p, crc = get(8);
+      if (crc !== crc8v2(v & ((1n << BigInt(n)) - 1n), n, v3)) return {error: "The words don't check out. One may be wrong or out of order: compare with the notes."};
+      if ((v >> BigInt(p)) !== 0n) return bad;
+      // only the one canonical encoding is valid, which also catches many copying errors
+      if (encodeV2(s, v3) !== v) return bad;
+      return {snap2: s};
+    } catch (e) { return bad; }
+  }
+
+  // words for a snapshot (written as version 3: no drugs or OCT results); null if it can't be held
+  function buildCodeV2(snap0){
+    const snap = JSON.parse(JSON.stringify(snap0));
+    ['RE', 'LE'].forEach(e => { if (snap[e]) snap[e].drug = 0; });
+    if (snap.review){ snap.review.RE = 0; snap.review.LE = 0; }
+    let v;
+    try { v = encodeV2(snap, true); } catch (e) { return null; }
+    const r = decodeV2(v, todayNum(), true);
+    if (!r.snap2 || JSON.stringify(r.snap2) !== JSON.stringify(snap)) return null;
+    const out = [];
+    for (; v > 0n; v /= CODE_BASE) out.push(CODE_WORDS[Number(v % CODE_BASE)]);
+    return out.reverse().join(' ');
+  }
+
+  const STATUS_CODE = {dry: 1, more: 2, less: 3}, STATUS_KEY = [null, 'dry', 'more', 'less'];
+  const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const dIdx = name => { const i = DRUGS.indexOf(name); return i < 0 ? 0 : i + 1; };
+
+  // The code holds the last two injections per eye and the latest review
+  // The code holds the last two injections per eye, the plan for the next ones, and the latest review
+  function currentSnapshot(){
+    const info = eye => {
+      const st = state[eye], a = st.events.slice().sort((x, y) => x.day - y.day);
+      if (!a.length) return null;
+      const last = a[a.length - 1], prevInj = a[a.length - 2];
+      const prev = prevInj ? last.day - prevInj.day : 0;
+      const booked = bookedOf(prev);
+      return {last: last.day, prev, drug: dIdx(last.drug), planned: st.interval != null ? st.interval : booked,
+              shift: [0, 1, 2].map(k => st.shift[k] || 0)};
+    };
+    const r = state.reviews.slice().sort((x, y) => x.day - y.day).pop();
+    return {RE: info('RE'), LE: info('LE'),
+            review: r ? {day: r.day, RE: STATUS_CODE[r.status.RE] || 0, LE: STATUS_CODE[r.status.LE] || 0} : null};
+  }
+  function codeSummary(){
+    const a = state.RE.events.length, b = state.LE.events.length, r = state.reviews.length;
+    const hRE = Math.min(2, a), hLE = Math.min(2, b), hR = r ? 1 : 0, parts = [];
+    if (hRE) parts.push(`RE ${plural(hRE, 'injection')}`);
+    if (hLE) parts.push(`LE ${plural(hLE, 'injection')}`);
+    if (hR) parts.push('latest review');
+    if (hRE || hLE) parts.push('the plan for the next injections');
+    return 'Holds ' + parts.join(', ') + '. Not drugs or OCT results' + (hRE + hLE + hR < a + b + r ? ', or older entries.' : '.');
+  }
+
+  let codeOpen = false, pMsg = '', pMsgT = null, pPending = null, pArm = null;
+  function renderCode(){
+    $('pToggle').setAttribute('aria-expanded', codeOpen);
+    $('pBody').classList.toggle('hidden', !codeOpen);
+    const snap = currentSnapshot(), box = $('pCode');
+    let code = '';
+    if (!snap.RE && !snap.LE && !snap.review){
+      box.textContent = 'Add an injection or a review to get a code.'; box.classList.add('empty'); $('pSum').textContent = '';
+    } else {
+      code = buildCodeV2(snap);
+      if (code){
+        const n = code.split(' ').length;
+        box.textContent = code; box.classList.remove('empty');
+        $('pSum').innerHTML = `${n} words. ${esc(codeSummary())}` + (n > 6 ? ' <span class="sg-note o" style="display:block;margin-top:4px">Over 6 words: this plan has several unusual changes at once.</span>' : '');
+      } else { box.textContent = "This can't be put in a code: dates more than 5 years apart, or a review more than 2 months ahead."; box.classList.add('empty'); $('pSum').textContent = ''; code = ''; }
+    }
+    $('pCopy').disabled = !code; $('pCopy').dataset.code = code;
+    $('pSub').textContent = pMsg || (code ? 'Code ready for the notes. Tap to view.' : 'Load a patient from a code, or get one for the notes.');
+  }
+  function finishLoad(){
+    ['RE', 'LE'].forEach(eye => { const l = state[eye].events[state[eye].events.length - 1]; if (l) state[eye].drug = l.drug; });
+    addStatus = {RE: null, LE: null}; reviewOpen = null; dayChoice = undefined; editK = null; hEdit = null;
+    rDate.reset(); iDate.reset();
+    codeOpen = false; $('pIn').value = ''; $('pErr').textContent = '';
+    pMsg = `Loaded: RE ${plural(state.RE.events.length, 'injection')}, LE ${plural(state.LE.events.length, 'injection')}, ${plural(state.reviews.length, 'review')}`;
+    clearTimeout(pMsgT); pMsgT = setTimeout(() => { pMsg = ''; renderCode(); }, 10000);
+    render();
+  }
+  function applySnapshotV2(s){
+    state = {eye: 'RE', RE: blank(), LE: blank(), reviews: []};
+    ['RE', 'LE'].forEach(eye => {
+      const e = s[eye]; if (!e) return;
+      if (e.prev) state[eye].events.push({id: nextId++, type: 'inj', day: e.last - e.prev, drug: ''});   // earlier drug isn't in the code
+      state[eye].events.push({id: nextId++, type: 'inj', day: e.last, drug: e.drug ? DRUGS[e.drug - 1] : ''});
+      state[eye].interval = e.planned === bookedOf(e.prev) ? null : e.planned;
+      state[eye].shift = e.shift.slice();
+    });
+    if (s.review) state.reviews.push({id: nextId++, day: s.review.day, status: {RE: STATUS_KEY[s.review.RE] || null, LE: STATUS_KEY[s.review.LE] || null}});
+    finishLoad();
+  }
+  function applySnapshot(s){
+    state = {eye: 'RE', RE: blank(), LE: blank(), reviews: []};
+    ['RE', 'LE'].forEach(eye => {
+      const e = s[eye]; if (!e) return;
+      if (e.prev) state[eye].events.push({id: nextId++, type: 'inj', day: e.day - e.prev, drug: ''});   // earlier drug isn't in the code
+      state[eye].events.push({id: nextId++, type: 'inj', day: e.day, drug: e.drug ? DRUGS[e.drug - 1] : ''});
+    });
+    if (s.review) state.reviews.push({id: nextId++, day: s.review.day, status: {RE: STATUS_KEY[s.review.RE] || null, LE: STATUS_KEY[s.review.LE] || null}});
+    finishLoad();
+  }
+  function applyLegacy(events){
+    state = {eye: 'RE', RE: blank(), LE: blank(), reviews: []};
+    events.forEach(e => {
+      const dn = k => k > 0 && DRUGS[k - 1] ? DRUGS[k - 1] : '';
+      if (e.flags & 1) state.RE.events.push({id: nextId++, type: 'inj', day: e.day, drug: dn(e.reD)});
+      if (e.flags & 2) state.LE.events.push({id: nextId++, type: 'inj', day: e.day, drug: dn(e.leD)});
+      if (e.flags & 4) state.reviews.push({id: nextId++, day: e.day, status: {RE: STATUS_KEY[e.reS] || null, LE: STATUS_KEY[e.leS] || null}});
+    });
+    finishLoad();
+  }
+  const applyParsed = r => r.snap2 ? applySnapshotV2(r.snap2) : r.snap ? applySnapshot(r.snap) : applyLegacy(r.legacyEvents);
+
+  // generic name (trade name)
+  const DRUGS = [['Aflibercept 2 mg', 'Eylea'], ['Aflibercept 8 mg', 'Eylea HD'], ['Faricimab', 'Vabysmo'],
+                 ['Ranibizumab', 'Lucentis'], ['Bevacizumab', 'Avastin'], ['Brolucizumab', 'Beovu']].map(([g, t]) => `${g} (${t})`);
+  const hintFor = day => {
+    if (day == null) return '';
+    const diff = day - todayNum();
+    return `${fmtLong(day)}, ${diff === 0 ? 'today' : diff < 0 ? wd(diff) + ' ago' : 'in ' + wd(diff)}`;
+  };
+  function editFormHtml(ev){
+    const h = hEdit, inj = h.kind === 'inj';
+    const nudge = [['-28', '&minus;4w'], ['-7', '&minus;1w'], ['-1', '&minus;1d'], ['1', '+1d'], ['7', '+1w'], ['28', '+4w']]
+      .map(([d, l]) => `<button type="button" data-d="${d}">${l}</button>`).join('');
+    const body = inj
+      ? `<label class="field"><span>Drug</span><select id="heDrug"><option value="">Not specified</option>${DRUGS.map(d => `<option${d === h.drug ? ' selected' : ''}>${d}</option>`).join('')}</select></label>`
+      : `<div class="field"><span>OCT (optional)</span>${['RE', 'LE'].map(eye => `<div class="oct-row"><b>${eye}</b><div class="seg status-seg" data-heye="${eye}">${
+          ['dry', 'more', 'less'].map(k => `<button type="button" data-status="${k}" aria-pressed="${h.status[eye] === k}">${STATUS[k].label}</button>`).join('')}</div></div>`).join('')}</div>`;
+    return `<li class="ev editing ${inj ? 'inj' : 'rev'}"><span class="mark"></span><div class="ev-edit">
+      <p class="ev-head"><strong>${inj ? 'Edit injection ' + ev.n : 'Edit review (both eyes)'}</strong></p>
+      <div class="field"><label for="heDate">Date</label>
+        <div class="date-row"><input type="date" id="heDate" value="${h.day != null ? toIso(h.day) : ''}"><button type="button" class="today-btn" id="heToday">Today</button></div>
+      </div>
+      <div class="nudge" aria-label="Adjust date">${nudge}</div>
+      <p class="date-hint" id="heHint">${hintFor(h.day)}</p>
+      ${body}
+      <p class="err" id="heErr" role="alert">${esc(h.err || '')}</p>
+      <div class="he-actions"><button type="button" class="primary" id="heSave">Save</button><button type="button" class="secondary" id="heCancel">Cancel</button></div>
+    </div></li>`;
+  }
+
+  function saveHistEdit(){
+    const h = hEdit; if (!h) return;
+    if (h.day == null){ h.err = 'Choose a date.'; renderTimeline(); return; }
+    if (h.kind === 'inj'){
+      const es = state[state.eye], ev = es.events.find(x => x.id === h.id);
+      if (!ev){ hEdit = null; render(); return; }
+      if (es.events.some(x => x.id !== h.id && x.day === h.day)){ h.err = `This eye already has an injection on ${fmtMed(h.day)}.`; renderTimeline(); return; }
+      const dateChanged = ev.day !== h.day;
+      ev.day = h.day; ev.drug = h.drug;
+      if (dateChanged){ es.interval = null; es.shift = [0, 0, 0]; editK = null; }   // intervals have changed, so recalculate
+    } else {
+      const r = state.reviews.find(x => x.id === h.id);
+      if (!r){ hEdit = null; render(); return; }
+      if (state.reviews.some(x => x.id !== h.id && x.day === h.day)){ h.err = `There's already a review on ${fmtMed(h.day)}.`; renderTimeline(); return; }
+      r.day = h.day; r.status = {...h.status};
+    }
+    hEdit = null; render();
+  }
+
+  function renderTimeline(){
+    const eye = state.eye, a = analyse(eye);
+    const nI = a.injs.length, nR = a.evs.length - nI;
+    $('hSub').textContent = `${EYES[eye]}: ${nI} injection${nI === 1 ? '' : 's'}, ${nR} review${nR === 1 ? '' : 's'}${histOpen ? '' : '. Tap to show.'}`;
+    $('hToggle').setAttribute('aria-expanded', histOpen);
+    $('hBody').classList.toggle('hidden', !histOpen);
+    document.querySelectorAll('#hEye button').forEach(b => b.setAttribute('aria-pressed', b.dataset.eye === eye));
+    if (!a.evs.length){ $('timeline').innerHTML = `<li class="empty" style="padding-left:32px">No injections or reviews added yet.</li>`; return; }
+    const items = a.evs.map(ev => {
+      if (hEdit && hEdit.id === ev.id) return editFormHtml(ev);
+      const prevInj = a.injs.filter(x => x.day < ev.day).pop();
+      const meta = [];
+      if (ev.type === 'inj'){
+        if (ev.drug) meta.push(esc(ev.drug));
+        meta.push(prevInj ? `<b>${wd(ev.day - prevInj.day)}</b> since injection ${prevInj.n}` : 'First recorded injection');
+        const guiding = a.evs.filter(x => x.type === 'rev' && x.day <= ev.day && (!prevInj || x.day > prevInj.day)).pop();
+        if (guiding) meta.push(guiding.day === ev.day ? 'Same day as review' : `${wd(ev.day - guiding.day)} after review`);
+        return `<li class="ev inj"><span class="mark"></span><div class="ev-main" role="button" tabindex="0" data-edit="${ev.id}" aria-label="Edit injection ${ev.n}">
+          <p class="ev-head"><strong>Injection ${ev.n}</strong><span>${fmtLong(ev.day)}</span></p>
+          ${meta.map(m => `<p class="ev-meta">${m}</p>`).join('')}</div>
+          <button type="button" class="del" data-del="${ev.id}" aria-label="Remove injection ${ev.n}">&times;</button></li>`;
+      } else {
+        meta.push(prevInj ? `<b>${wd(ev.day - prevInj.day)}</b> after injection ${prevInj.n}` : 'No earlier injection recorded');
+        return `<li class="ev rev"><span class="mark"></span><div class="ev-main" role="button" tabindex="0" data-edit="${ev.id}" aria-label="Edit review on ${fmtMed(ev.day)}">
+          <p class="ev-head"><strong>Review</strong><span>${fmtLong(ev.day)}</span>${ev.status ? `<span class="chip ${ev.status}">${STATUS[ev.status].label}</span>` : ''}</p>
+          ${meta.map(m => `<p class="ev-meta">${m}</p>`).join('')}</div>
+          <button type="button" class="del" data-del="${ev.id}" aria-label="Remove review on ${fmtMed(ev.day)} for both eyes">&times;</button></li>`;
+      }
+    });
+    $('timeline').innerHTML = items.reverse().join('');
+  }
+
+  function renderForm(){
+    document.querySelectorAll('#rBody .status-seg').forEach(sg => sg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.status === addStatus[sg.dataset.eye])));
+    document.querySelectorAll('#iEye button').forEach(b => b.setAttribute('aria-pressed', b.dataset.eye === state.eye));
+    $('iToggle').setAttribute('aria-expanded', injOpen);
+    $('iBody').classList.toggle('hidden', !injOpen);
+    const nR = state.RE.events.length, nL = state.LE.events.length;
+    $('iSub').classList.toggle('hidden', injOpen);
+    $('iSub').textContent = `RE ${nR} injection${nR === 1 ? '' : 's'}, LE ${nL} injection${nL === 1 ? '' : 's'}. Tap to add more.`;
+    $('drug').value = state[state.eye].drug;
+  }
+
+  function renderReview(){
+    const open = reviewOpen == null ? state.reviews.length === 0 : reviewOpen;
+    $('rToggle').setAttribute('aria-expanded', open);
+    $('rBody').classList.toggle('hidden', !open);
+    const last = state.reviews.slice().sort((a, b) => a.day - b.day).pop();
+    $('rSub').classList.toggle('hidden', !last);
+    if (last) $('rSub').textContent = `Last review ${fmtLong(last.day)}${open ? '' : '. Tap to add another.'}`;
+  }
+
+  let cType = 'range', cEditId = null, closOpen = false;
+  function renderClosures(){
+    $('cToggle').setAttribute('aria-expanded', closOpen);
+    $('cBody').classList.toggle('hidden', !closOpen);
+    const n = closures.length;
+    $('cSub').textContent = `${n} closure${n === 1 ? '' : 's'}${closOpen ? '' : '. Tap to view or edit.'}`;
+    const sorted = closures.slice().sort((a, b) => (a.from ?? a.start) - (b.from ?? b.start));
+    $('cList').innerHTML = sorted.length ? sorted.map(c => {
+      const desc = c.type === 'range'
+        ? (c.from === c.to ? fmtLong(c.from) : `${fmtLong(c.from)} to ${fmtLong(c.to)}`)
+        : `Every ${c.every === 1 ? 'week' : c.every + ' weeks'} on ${DAYS[new Date(c.start * DAY).getUTCDay()]}, from ${fmtMed(c.start)}`;
+      return `<li class="${c.id === cEditId ? 'editing' : ''}"><button type="button" class="cl-item" data-edit="${c.id}"><b>${esc(closureName(c))}</b><span>${desc}</span></button>
+        <button type="button" class="del" data-cdel="${c.id}" aria-label="Remove ${esc(closureName(c))}">&times;</button></li>`;
+    }).join('') : '<li class="empty" style="border:0;padding:0">No closures.</li>';
+    document.querySelectorAll('#cType button').forEach(b => b.setAttribute('aria-pressed', b.dataset.type === cType));
+    $('cRangeF').classList.toggle('hidden', cType !== 'range');
+    $('cRepeatF').classList.toggle('hidden', cType !== 'repeat');
+    $('cFormTitle').textContent = cEditId ? 'Edit closure' : 'Add a closure';
+    $('cAdd').textContent = cEditId ? 'Save changes' : 'Add closure';
+    $('cCancel').classList.toggle('hidden', !cEditId);
+  }
+  function clearClosureForm(){
+    cEditId = null; $('cFrom').value = ''; $('cTo').value = ''; $('cStart').value = ''; $('cEvery').value = '4'; $('cLabel').value = ''; $('cErr').textContent = '';
+  }
+
+  function render(){ renderCode(); renderCalc(); renderClosures(); renderReview(); renderOverview(); renderDue(); renderChart(); renderSuggest(); renderTimeline(); renderForm(); }
+
+  // events
+  function switchEye(eye){
+    if (eye === state.eye) return;
+    state[state.eye].entryDay = iDate.day();          // remember where this eye's date was
+    state.eye = eye; editK = null; hEdit = null;
+    const d = state[state.eye].entryDay;
+    iDate.set(d != null ? d : todayNum());            // other eye starts from today
+    render();
+  }
+  $('overview').addEventListener('click', e => { const b = e.target.closest('[data-eye]'); if (b) switchEye(b.dataset.eye); });
+  $('iEye').addEventListener('click', e => { const b = e.target.closest('[data-eye]'); if (b) switchEye(b.dataset.eye); });
+  $('hEye').addEventListener('click', e => { const b = e.target.closest('[data-eye]'); if (b) switchEye(b.dataset.eye); });
+  $('hToggle').addEventListener('click', () => { histOpen = !histOpen; renderTimeline(); });
+  $('pToggle').addEventListener('click', () => { codeOpen = !codeOpen; renderCode(); });
+  const disarmLoad = () => { clearTimeout(pArm); pArm = null; pPending = null; $('pLoad').textContent = 'Load'; };
+  $('pIn').addEventListener('input', () => { disarmLoad(); $('pErr').textContent = ''; });
+  $('pIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); $('pLoad').click(); } });
+  $('pLoad').addEventListener('click', () => {
+    const err = $('pErr');
+    if (pArm && pPending){ const r0 = pPending; disarmLoad(); applyParsed(r0); return; }
+    const r = parseCode($('pIn').value);
+    if (r.error){ err.textContent = r.error; return; }
+    if (state.RE.events.length || state.LE.events.length || state.reviews.length){
+      pPending = r; $('pLoad').textContent = 'Replace?';
+      err.textContent = 'This replaces the data already entered. Tap Replace? to continue.';
+      pArm = setTimeout(() => { disarmLoad(); err.textContent = ''; }, 5000);
+      return;
+    }
+    applyParsed(r);
+  });
+  $('pCopy').addEventListener('click', () => {
+    const code = $('pCopy').dataset.code; if (!code) return;
+    const done = () => { $('pCopy').textContent = 'Copied'; setTimeout(() => { $('pCopy').textContent = 'Copy code'; }, 1500); };
+    const fallback = () => {
+      const ta = document.createElement('textarea'); ta.value = code; ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch(e) {} document.body.removeChild(ta);
+    };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(done, fallback); else fallback(); } catch(e){ fallback(); }
+  });
+  $('kToggle').addEventListener('click', () => { kOpen = !kOpen; renderCalc(); });
+  $('kMode').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b){ kMode = b.dataset.mode; renderCalc(); } });
+  ['kFrom', 'kWeeks', 'kDate'].forEach(id => $(id).addEventListener('input', renderCalc));
+  $('kFromToday').addEventListener('click', () => { $('kFrom').value = toIso(todayNum()); renderCalc(); });
+  $('kMinus').addEventListener('click', () => { $('kWeeks').value = Math.max(0, (Number($('kWeeks').value) || 0) - 1); renderCalc(); });
+  $('kPlus').addEventListener('click', () => { $('kWeeks').value = Math.min(104, (Number($('kWeeks').value) || 0) + 1); renderCalc(); });
+  $('kFrom').value = toIso(todayNum()); $('kDate').value = toIso(todayNum() + 28);
+  $('cToggle').addEventListener('click', () => { closOpen = !closOpen; renderClosures(); });
+  $('cType').addEventListener('click', e => { const b = e.target.closest('[data-type]'); if (b){ cType = b.dataset.type; renderClosures(); } });
+  $('cList').addEventListener('click', e => {
+    const del = e.target.closest('[data-cdel]');
+    if (del){ closures = closures.filter(c => c.id !== del.dataset.cdel); if (cEditId === del.dataset.cdel) clearClosureForm(); saveClosures(); render(); return; }
+    const ed = e.target.closest('[data-edit]'); if (!ed) return;
+    const c = closures.find(x => x.id === ed.dataset.edit); if (!c) return;
+    cEditId = c.id; cType = c.type; $('cErr').textContent = '';
+    $('cLabel').value = c.label || '';
+    if (c.type === 'range'){ $('cFrom').value = toIso(c.from); $('cTo').value = c.to === c.from ? '' : toIso(c.to); }
+    else { $('cStart').value = toIso(c.start); $('cEvery').value = c.every; }
+    renderClosures();
+    $('cFormTitle').scrollIntoView({block: 'nearest'});
+  });
+  $('cCancel').addEventListener('click', () => { clearClosureForm(); renderClosures(); });
+  $('cDefaults').addEventListener('click', () => {
+    const have = new Set(closures.map(c => c.id));
+    DEFAULT_CLOSURES.forEach(c => { if (!have.has(c.id)) closures.push({...c}); });
+    saveClosures(); render();
+  });
+  $('cAdd').addEventListener('click', () => {
+    const label = $('cLabel').value.trim();
+    let c;
+    if (cType === 'range'){
+      if (!$('cFrom').value){ $('cErr').textContent = 'Choose a From date.'; return; }
+      const from = dayNum($('cFrom').value), to = $('cTo').value ? dayNum($('cTo').value) : from;
+      if (to < from){ $('cErr').textContent = 'To must be on or after From.'; return; }
+      c = {type: 'range', from, to, label};
+    } else {
+      if (!$('cStart').value){ $('cErr').textContent = 'Choose the first closed day.'; return; }
+      const every = Math.round(Number($('cEvery').value));
+      if (!(every >= 1 && every <= 52)){ $('cErr').textContent = 'Every must be between 1 and 52 weeks.'; return; }
+      c = {type: 'repeat', start: dayNum($('cStart').value), every, label};
+    }
+    if (cEditId){ c.id = cEditId; closures = closures.map(x => x.id === cEditId ? c : x); }
+    else { c.id = 'c' + Date.now().toString(36); closures.push(c); }
+    saveClosures(); clearClosureForm(); render();
+  });
+  $('iToggle').addEventListener('click', () => { injOpen = !injOpen; renderForm(); });
+  document.querySelectorAll('#rBody .status-seg').forEach(sg => sg.addEventListener('click', e => {
+    const b = e.target.closest('[data-status]'); if (!b) return;
+    const eye = sg.dataset.eye;
+    addStatus[eye] = addStatus[eye] === b.dataset.status ? null : b.dataset.status; renderForm();
+  }));
+  function dateCtl(p){
+    const inp = $(p + 'Date'), hint = $(p + 'Hint'), err = $(p + 'Err');
+    const upd = () => {
+      if (!inp.value){ hint.textContent = ''; return; }
+      const n = dayNum(inp.value), diff = n - todayNum();
+      hint.textContent = `${fmtLong(n)}, ${diff === 0 ? 'today' : diff < 0 ? wd(diff) + ' ago' : 'in ' + wd(diff)}`;
+    };
+    const set = n => { inp.value = toIso(n); err.textContent = ''; err.classList.remove('ok'); upd(); };
+    $(p + 'Nudge').addEventListener('click', e => {
+      const b = e.target.closest('[data-d]'); if (!b) return;
+      set((inp.value ? dayNum(inp.value) : todayNum()) + Number(b.dataset.d));
+    });
+    $(p + 'Today').addEventListener('click', () => set(todayNum()));
+    inp.addEventListener('input', upd);
+    set(todayNum());
+    return {reset: () => set(todayNum()), set, day: () => inp.value ? dayNum(inp.value) : null, err};
+  }
+  const rDate = dateCtl('r'), iDate = dateCtl('i');
+  // Keep an element at the same screen position while content above it changes size
+  function keepInPlace(el, fn){
+    const before = el.getBoundingClientRect().top;
+    fn();
+    const shift = el.getBoundingClientRect().top - before;
+    if (shift) window.scrollBy(0, shift);
+  }
+  const futureNote = day => day > todayNum() ? 'Note: that date is in the future.' : '';
+
+  $('drug').insertAdjacentHTML('beforeend', DRUGS.map(d => `<option>${d}</option>`).join(''));
+  $('drug').addEventListener('change', e => { state[state.eye].drug = e.target.value; });
+  $('iAdd').addEventListener('click', () => {
+    const day = iDate.day();
+    iDate.err.classList.remove('ok');
+    if (day == null){ iDate.err.textContent = 'Choose a date first.'; return; }
+    const eyeState = state[state.eye];
+    if (eyeState.events.some(x => x.day === day)){ iDate.err.textContent = `This eye already has an injection on ${fmtMed(day)}.`; return; }
+    const ev = {id: nextId++, type: 'inj', day, drug: $('drug').value};
+    eyeState.events.push(ev);
+    eyeState.drug = $('drug').value; eyeState.interval = null; eyeState.shift = [0,0,0]; editK = null;
+    keepInPlace($('iAdd'), render);
+    const n = analyse(state.eye).injs.findIndex(x => x.id === ev.id) + 1;
+    iDate.err.classList.add('ok');
+    iDate.err.textContent = `Added ${state.eye} injection #${n}, ${fmtLong(day)}${day > todayNum() ? ' (future date)' : ''}`;
+    const btn = $('iAdd');
+    btn.classList.add('done'); btn.textContent = '\u2713 Added';
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.classList.remove('done'); btn.textContent = 'Add injection'; }, 1200);
+  });
+  $('rToggle').addEventListener('click', () => {
+    const open = $('rToggle').getAttribute('aria-expanded') === 'true';
+    reviewOpen = !open; renderReview();
+  });
+  $('rAdd').addEventListener('click', () => {
+    const day = rDate.day();
+    if (day == null){ rDate.err.textContent = 'Choose a date first.'; return; }
+    if (state.reviews.some(r => r.day === day)){ rDate.err.textContent = `There's already a review on ${fmtMed(day)}.`; return; }
+    state.reviews.push({id: nextId++, day, status: {...addStatus}});
+    addStatus = {RE:null, LE:null};
+    rDate.err.textContent = futureNote(day);
+    reviewOpen = false;
+    keepInPlace($('rToggle'), render);
+  });
+  $('timeline').addEventListener('click', e => {
+    const t = e.target;
+    const del = t.closest('[data-del]');
+    if (del){
+      const id = Number(del.dataset.del);
+      if (hEdit && hEdit.id === id) hEdit = null;
+      if (state.reviews.some(r => r.id === id)){ state.reviews = state.reviews.filter(r => r.id !== id); render(); return; }
+      const es = state[state.eye];
+      const removed = es.events.find(x => x.id === id);
+      es.events = es.events.filter(x => x.id !== id);
+      if (removed && removed.type === 'inj'){ es.interval = null; es.shift = [0,0,0]; editK = null; }
+      render(); return;
+    }
+    const item = t.closest('[data-edit]');
+    if (item){
+      const id = Number(item.dataset.edit);
+      if (hEdit && hEdit.id === id){ hEdit = null; renderTimeline(); return; }
+      const rev = state.reviews.find(r => r.id === id);
+      if (rev) hEdit = {id, kind: 'rev', day: rev.day, status: {RE: rev.status.RE || null, LE: rev.status.LE || null}, err: ''};
+      else {
+        const inj = state[state.eye].events.find(x => x.id === id);
+        if (!inj) return;
+        hEdit = {id, kind: 'inj', day: inj.day, drug: inj.drug || '', status: {}, err: ''};
+      }
+      renderTimeline(); return;
+    }
+    if (!hEdit) return;
+    const nudge = t.closest('[data-d]');
+    if (nudge){ hEdit.day = (hEdit.day != null ? hEdit.day : todayNum()) + Number(nudge.dataset.d); hEdit.err = ''; renderTimeline(); return; }
+    if (t.closest('#heToday')){ hEdit.day = todayNum(); hEdit.err = ''; renderTimeline(); return; }
+    const st = t.closest('[data-heye] [data-status]');
+    if (st){ const eye = st.closest('[data-heye]').dataset.heye; hEdit.status[eye] = hEdit.status[eye] === st.dataset.status ? null : st.dataset.status; renderTimeline(); return; }
+    if (t.closest('#heCancel')){ hEdit = null; renderTimeline(); return; }
+    if (t.closest('#heSave')) saveHistEdit();
+  });
+  $('timeline').addEventListener('keydown', e => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.ev-main')){ e.preventDefault(); e.target.click(); }
+  });
+  $('timeline').addEventListener('input', e => {
+    if (e.target.id !== 'heDate' || !hEdit) return;
+    hEdit.day = e.target.value ? dayNum(e.target.value) : null; hEdit.err = '';
+    $('heHint').textContent = hintFor(hEdit.day); $('heErr').textContent = '';
+  });
+  $('timeline').addEventListener('change', e => { if (e.target.id === 'heDrug' && hEdit) hEdit.drug = e.target.value; });
+  let clearArmed = null;
+  $('clearBtn').addEventListener('click', () => {
+    const btn = $('clearBtn');
+    if (!clearArmed){
+      btn.textContent = 'Tap again to clear both eyes';
+      clearArmed = setTimeout(() => { clearArmed = null; btn.textContent = 'New patient'; }, 3000);
+      return;
+    }
+    clearTimeout(clearArmed); clearArmed = null; btn.textContent = 'New patient';
+    state = {eye:'RE', RE:blank(), LE:blank(), reviews:[]}; addStatus = {RE:null, LE:null}; reviewOpen = null; injOpen = true; histOpen = false; dayChoice = undefined; hEdit = null;
+    disarmLoad(); $('pIn').value = ''; $('pErr').textContent = ''; pMsg = '';
+    rDate.reset(); iDate.reset(); render();
+  });
+
+  $('today').textContent = 'Today ' + fmtMed(todayNum());
+  render();
+
+  // start-up popup
+  const closeIntro = () => { $('intro').remove(); document.removeEventListener('keydown', escIntro); };
+  const escIntro = e => { if (e.key === 'Escape') closeIntro(); };
+  $('introOk').addEventListener('click', closeIntro);
+  $('intro').addEventListener('click', e => { if (e.target.id === 'intro') closeIntro(); });
+  document.addEventListener('keydown', escIntro);
+  $('introOk').focus();
+})();
+</script>
+</body>
+</html>
